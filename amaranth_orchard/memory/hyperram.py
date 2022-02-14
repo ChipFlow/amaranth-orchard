@@ -245,7 +245,7 @@ class HyperRAM(Peripheral, Elaboratable):
             self._ctrl_cfg.r_data.eq(self.latency)
         ]
         with m.If(self._ctrl_cfg.w_stb):
-            m.d.sync += self.latency.eq(self._ctrl_cfg[0:4])
+            m.d.sync += self.latency.eq(self._ctrl_cfg.w_data[0:4])
         return m
 
 def sim():
