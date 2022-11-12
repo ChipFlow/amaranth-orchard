@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "amaranth-orchard"
+version = "0.0.0"
+description = "A curated collection of Amaranth cores"
+authors = ["Myrtle Shah <myrtle.shah@chipflow.io>"]
+license = "MIT-Modern-Variant"
+readme = "README.md"
+packages = [{include = "amaranth_orchard"}]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+amaranth = { git = "https://github.com/amaranth-lang/amaranth.git" }
+
+[tool.poetry-dynamic-versioning]
+enable = true
+dirty = true
+vcs = "git"
+style = "pep440"
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.setuptools.packages.find]
+where = ["amaranth-orchard"]
+
+[tool.setuptools.package-data]
+mypkg = ["*.v"]
