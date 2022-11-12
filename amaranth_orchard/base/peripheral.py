@@ -1,6 +1,6 @@
 # From lambdasoc, with some small updates
-# TODO: consider returning to use upstream lambdasoc instead...
 #
+# Copyright (C) 2021-2 ChipFlow Ltd.
 # Copyright (C) 2020 LambdaConcept
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,6 +22,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import sys, os
 from amaranth import *
 from amaranth import tracer
 from amaranth.utils import log2_int
@@ -86,6 +87,27 @@ class Peripheral:
 
         self._bus       = None
         self._irq       = None
+
+    def model_sources(self):
+        # list absolute paths of all c++ sources for simulating this peripheral
+        class_path = os.path.abspath(sys.modules[self.__module__].__file__)
+        return [ os.path.join(class_path, self.models_path,  model) for model in models ]
+
+    def model_includepaths(self):
+        # list of absolute paths where to find headers for simulating  this peripheral
+        class_path = os.path.abspath(sys.modules[self.__module__].__file__)
+        return [ os.path.join(class_path, self.models_path) ]
+
+    @property
+    @abstractmethod
+    def models(self):
+        # list of simulation model c++ sources for simulating this peripheral
+        pass
+
+    @property
+    def models_path(self):
+        # path relative to the class source where c++ simulation models can be found
+        return "models"
 
     @property
     def bus(self):
