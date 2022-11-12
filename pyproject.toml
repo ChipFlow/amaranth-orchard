@@ -10,6 +10,8 @@ packages = [{include = "amaranth_orchard"}]
 [tool.poetry.dependencies]
 python = "^3.7"
 amaranth = { git = "https://github.com/amaranth-lang/amaranth.git" }
+amaranth_soc = { git = "https://github.com/amaranth-lang/amaranth-soc.git" }
+amaranth_stdio = { git = "https://github.com/amaranth-lang/amaranth-stdio.git" }
 
 [tool.poetry-dynamic-versioning]
 enable = true
