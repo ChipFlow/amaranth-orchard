@@ -100,7 +100,8 @@ class Peripheral(ABC):
     def model_includepaths(self):
         # list of absolute paths where to find headers for simulating  this peripheral
         class_dir = os.path.dirname(os.path.abspath(sys.modules[self.__module__].__file__))
-        return [ os.path.join(class_dir, self._models_path()) ]
+        base_models = os.path.join(os.path.dirname(os.path.abspath(sys.modules[Peripheral.__module__].__file__)), "models/")
+        return [ os.path.join(class_dir, self._models_path()), base_models ]
 
     @abstractmethod
     def _models(self):

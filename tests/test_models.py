@@ -20,6 +20,7 @@ class TestModels(unittest.TestCase):
  
     def test_includes(self):
        self.assertRegex(self.uart.model_includepaths[0], "amaranth_orchard/io/models/$" )
+       self.assertRegex(self.uart.model_includepaths[1], "amaranth_orchard/base/models/$" )
 
     def test_sources(self):
         l = []
