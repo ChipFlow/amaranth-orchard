@@ -23,6 +23,8 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import sys, os
+from abc import ABC, abstractmethod
+
 from amaranth import *
 from amaranth import tracer
 from amaranth.utils import log2_int
@@ -31,7 +33,7 @@ from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
 
-class Peripheral:
+class Peripheral(ABC):
     """Wishbone peripheral.
 
     A helper class to reduce the boilerplate needed to control a peripheral with a Wishbone interface.
@@ -88,26 +90,26 @@ class Peripheral:
         self._bus       = None
         self._irq       = None
 
+    @property
     def model_sources(self):
         # list absolute paths of all c++ sources for simulating this peripheral
-        class_path = os.path.abspath(sys.modules[self.__module__].__file__)
-        return [ os.path.join(class_path, self.models_path,  model) for model in models ]
-
-    def model_includepaths(self):
-        # list of absolute paths where to find headers for simulating  this peripheral
-        class_path = os.path.abspath(sys.modules[self.__module__].__file__)
-        return [ os.path.join(class_path, self.models_path) ]
+        class_dir = os.path.dirname(os.path.abspath(sys.modules[self.__module__].__file__))
+        return [ os.path.join(class_dir, self._models_path(),  model) for model in self._models() ]
 
     @property
+    def model_includepaths(self):
+        # list of absolute paths where to find headers for simulating  this peripheral
+        class_dir = os.path.dirname(os.path.abspath(sys.modules[self.__module__].__file__))
+        return [ os.path.join(class_dir, self._models_path()) ]
+
     @abstractmethod
-    def models(self):
+    def _models(self):
         # list of simulation model c++ sources for simulating this peripheral
         pass
 
-    @property
-    def models_path(self):
+    def _models_path(self):
         # path relative to the class source where c++ simulation models can be found
-        return "models"
+        return "models/"
 
     @property
     def bus(self):

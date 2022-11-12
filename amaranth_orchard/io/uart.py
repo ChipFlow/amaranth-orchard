@@ -41,12 +41,9 @@ class UARTPeripheral(Peripheral, Elaboratable):
         self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
         self.bus        = self._bridge.bus
 
-    def models(self):
+    def _models(self):
         return ["uart.cc"]
     
-    def models_path(self):
-        return ["models"]
-
     def elaborate(self, platform):
         m = Module()
         m.submodules.bridge  = self._bridge
