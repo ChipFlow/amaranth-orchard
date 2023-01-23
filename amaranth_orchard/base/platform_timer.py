@@ -38,7 +38,7 @@ class PlatformTimer(Peripheral, Elaboratable):
         ]
         m.d.sync += [
             timer.eq(timer + 1),
-            self.timer_irq.eq(time_cmp_valid & timer >= time_cmp),
+            self.timer_irq.eq(time_cmp_valid & (timer >= time_cmp)),
         ]
 
         with m.If(self._time_high.w_stb.any()):
