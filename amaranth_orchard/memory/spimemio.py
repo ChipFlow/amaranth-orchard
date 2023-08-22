@@ -94,8 +94,8 @@ class SPIMemIO(Peripheral, Elaboratable):
         m.d.comb += ctrl_enable.eq(self.ctrl_bus.stb & self.ctrl_bus.cyc & ~self.ctrl_bus.ack)
         m.d.sync += self.ctrl_bus.ack.eq(ctrl_enable)
 
-        filename = Path(__file__).parent / f"verilog/spimemio.v"
-        with open(filename, 'r') as f:
-            platform.add_file(str(filename), f)
+        path = Path(__file__).parent / f"verilog/spimemio.v"
+        with open(path, 'r') as f:
+            platform.add_file(path.name, f)
 
         return m
