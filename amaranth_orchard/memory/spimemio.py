@@ -30,19 +30,17 @@ class SPIMemIO(Peripheral, Elaboratable):
     def __init__(self, *, flash, **kwargs):
         super().__init__()
 
-        self.data_bus = wishbone.Interface(addr_width=22,
-                                      data_width=32, granularity=8)
+        memory_map = MemoryMap(addr_width=24, data_width=8)
+        memory_map.add_resource(name="flash", size=2**24, resource=self)
+        self.data_bus = wishbone.Interface(addr_width=22, data_width=32, granularity=8,
+                                           memory_map=memory_map)
         self.flash = flash
-        map = MemoryMap(addr_width=24, data_width=8)
-        map.add_resource(name="flash", size=2**24, resource=self)
-        self.data_bus.memory_map = map
 
-        bank            = self.csr_bank()
-        self.ctrl_bus = wishbone.Interface(addr_width=0,
-                                      data_width=32, granularity=8)
-        map = MemoryMap(addr_width=2, data_width=8)
-        map.add_resource(name="flash_ctrl", size=4, resource=self)
-        self.ctrl_bus.memory_map = map
+        bank = self.csr_bank()
+        memory_map = MemoryMap(addr_width=2, data_width=8)
+        memory_map.add_resource(name="flash_ctrl", size=4, resource=self)
+        self.ctrl_bus = wishbone.Interface(addr_width=0, data_width=32, granularity=8,
+                                           memory_map=memory_map)
         self.size = 2**24
 
     def elaborate(self, platform):
