@@ -64,9 +64,10 @@ class SRAMPeripheral(Peripheral, Elaboratable):
 
         self._mem = Memory(depth=(size * granularity) // data_width, width=data_width, simulate=False)
 
-        memory_map = MemoryMap(addr_width=log2_int(size), data_width=granularity, name=self.name)
+        memory_map = MemoryMap(addr_width=max(1, log2_int(size)), data_width=granularity,
+                               name=self.name)
         memory_map.add_resource(name=f"sram{index}", size=size, resource=self._mem)
-        self.bus = wishbone.Interface(addr_width=log2_int(self._mem.depth),
+        self.bus = wishbone.Interface(addr_width=max(1, log2_int(self._mem.depth)),
                                       data_width=self._mem.width, granularity=granularity,
                                       memory_map=memory_map)
 

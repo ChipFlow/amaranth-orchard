@@ -48,10 +48,10 @@ class HyperRAM(Peripheral, Elaboratable):
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?
-        memory_map = MemoryMap(addr_width=ceil(log2(self.size)), data_width=8)
+        memory_map = MemoryMap(addr_width=max(1, ceil(log2(self.size))), data_width=8)
         memory_map.add_resource(name=f"hyperram{index}", size=self.size, resource=self)
-        self.data_bus = wishbone.Interface(addr_width=ceil(log2(self.size / 4)), data_width=32,
-                                           granularity=8, memory_map=memory_map)
+        self.data_bus = wishbone.Interface(addr_width=max(1, ceil(log2(self.size / 4))),
+                                           data_width=32, granularity=8, memory_map=memory_map)
 
         bank               = self.csr_bank()
         self._ctrl_cfg     = bank.csr(32, "rw", name=f"ctrl_cfg")
