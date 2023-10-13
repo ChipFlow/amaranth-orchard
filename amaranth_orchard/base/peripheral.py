@@ -169,7 +169,7 @@ class Peripheral:
         An instance of :class:`amaranth_soc.wishbone.Interface`.
         """
         window = wishbone.Interface(addr_width=addr_width, data_width=data_width,
-                                    granularity=granularity, features=features, name=name)
+                                    granularity=granularity, features=features, path=(name,))
         self._windows.append((window, addr, sparse))
         return window
 
@@ -273,7 +273,7 @@ class CSRBank:
 
         if any(elem.name == name for (elem, _, _) in self._csr_regs):
             raise Exception("CSR \"{}\" has already been defined".format(name))
-        elem = csr.Element(width, access, name=name)
+        elem = csr.Element(width, access, path=(name,))
         self._csr_regs.append((elem, addr, alignment))
         return elem
 
