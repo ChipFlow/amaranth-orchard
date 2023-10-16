@@ -6,6 +6,8 @@ import os.path
 from amaranth import *
 from amaranth.lib.io import pin_layout
 from amaranth_orchard.io.uart import UARTPeripheral
+import amaranth.back.pysim 
+
 
 class TestModels(unittest.TestCase):
     def setUp(self):
@@ -29,6 +31,12 @@ class TestModels(unittest.TestCase):
             l.append(os.path.basename(s))
         self.assertEqual(l, ["uart.cc"])
 
+    def test_sim_python(self):
+        sim = amaranth.back.pysim.Simulator(self.uart)
+        with sim.write_vcd("test.vcd"):
+            sim.add_clock(1e-6)
+            sim.add_sync_process(process)
+            sim.run()
 
 if __name__ == '__main__':
     unittest.main()
