@@ -53,11 +53,11 @@ class HyperRAM(Peripheral, Elaboratable):
         self.data_bus = wishbone.Interface(addr_width=ceil(log2(self.size / 4)), data_width=32,
                                            granularity=8, memory_map=memory_map)
 
-        bank               = self.csr_bank()
+        bank               = self.csr_bank(addr_width=3)
         self._ctrl_cfg     = bank.csr(32, "rw", name=f"ctrl_cfg")
         self._hram_cfg     = bank.csr(32, "w", name=f"hram_cfg")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8)
+        self._bridge    = self.bridge(addr_width=3, data_width=32, granularity=8)
         self.ctrl_bus = self._bridge.bus
 
         # Control registers

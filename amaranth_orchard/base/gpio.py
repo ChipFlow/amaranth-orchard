@@ -1,4 +1,7 @@
+from math import ceil
+
 from amaranth import *
+from amaranth.utils import log2_int
 
 from .peripheral import Peripheral
 
@@ -27,13 +30,16 @@ class GPIOPeripheral(Peripheral, Elaboratable):
 
         self.width = len(pins.o)
         self.pins = pins
+        alignment = 2
 
-        bank            = self.csr_bank()
+        bank_addr_width = 2 + max(log2_int(ceil(self.width / 8), need_pow2=False), alignment)
+        bank            = self.csr_bank(addr_width=bank_addr_width)
         self._dout      = bank.csr(self.width, "rw")
         self._oe        = bank.csr(self.width, "rw")
         self._din       = bank.csr(self.width, "r")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
+        self._bridge    = self.bridge(addr_width=bank_addr_width - 2, data_width=32, granularity=8,
+                                      alignment=alignment)
         self.bus        = self._bridge.bus
 
     def elaborate(self, platform):

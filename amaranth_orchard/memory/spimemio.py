@@ -36,7 +36,6 @@ class SPIMemIO(Peripheral, Elaboratable):
                                            memory_map=memory_map)
         self.flash = flash
 
-        bank = self.csr_bank()
         memory_map = MemoryMap(addr_width=2, data_width=8)
         memory_map.add_resource(name="flash_ctrl", size=4, resource=self)
         self.ctrl_bus = wishbone.Interface(addr_width=0, data_width=32, granularity=8,

@@ -29,7 +29,7 @@ class UARTPeripheral(Peripheral, Elaboratable):
         self.init_divisor = init_divisor
         self.pins = pins
 
-        bank            = self.csr_bank()
+        bank            = self.csr_bank(addr_width=5)
         self.tx_data    = bank.csr(8, "w")
         self.rx_data    = bank.csr(8, "r")
 
@@ -38,7 +38,7 @@ class UARTPeripheral(Peripheral, Elaboratable):
 
         self.divisor    = bank.csr(24, "rw")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
+        self._bridge    = self.bridge(addr_width=3, data_width=32, granularity=8, alignment=2)
         self.bus        = self._bridge.bus
 
     def elaborate(self, platform):
