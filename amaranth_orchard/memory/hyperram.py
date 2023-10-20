@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out
 
 from amaranth.sim import Simulator, Delay, Settle
 
@@ -17,20 +19,28 @@ from math import ceil, log2
 
 # HyperRAM -----------------------------------------------------------------------------------------
 
-class HyperRAMPins(Record):
-    def __init__(self, cs_count=1):
-        layout = [
-            ("clk_o", 1),
-            ("csn_o", cs_count),
-            ("rstn_o", 1),
-            ("rwds_o", 1),
-            ("rwds_oe", 1),
-            ("rwds_i", 1),
-            ("dq_o", 8),
-            ("dq_oe", 8),
-            ("dq_i", 8),
-        ]
-        super().__init__(layout)
+class HyperRAMPins(wiring.Interface):
+    class Signature(wiring.Signature):
+        def __init__(self, *, cs_count=1):
+            self.cs_count = cs_count
+            super().__init__({
+                "clk_o":   Out(1),
+                "csn_o":   Out(cs_count),
+                "rstn_o":  Out(1),
+                "rwds_o":  Out(1),
+                "rwds_oe": Out(1),
+                "rwds_i":  In(1),
+                "dq_o":    Out(8),
+                "dq_oe":   Out(8),
+                "dq_i":    In(8),
+            })
+
+        def create(self, *, path=()):
+            return HyperRAMPins(cs_count=self.cs_count)
+
+    def __init__(self, *, cs_count=1, path=()):
+        super().__init__(HyperRAMPins.Signature(cs_count=cs_count), path=path)
+
 
 class HyperRAM(Peripheral, Elaboratable):
     """HyperRAM

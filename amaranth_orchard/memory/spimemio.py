@@ -1,4 +1,6 @@
 from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out
 from amaranth.utils import log2_int
 
 from amaranth_soc import wishbone
@@ -8,16 +10,24 @@ from ..base.peripheral import Peripheral
 
 from pathlib import Path
 
-class QSPIPins(Record):
-    def __init__(self):
-        layout = [
-            ("clk_o", 1),
-            ("csn_o", 1),
-            ("d_o",   4),
-            ("d_oe",  4),
-            ("d_i",   4),
-        ]
-        super().__init__(layout)
+
+class QSPIPins(wiring.Interface):
+    class Signature(wiring.Signature):
+        def __init__(self):
+            super().__init__({
+                "clk_o": Out(1),
+                "csn_o": Out(1),
+                "d_o":   Out(4),
+                "d_oe":  Out(4),
+                "d_i":   In(4),
+            })
+
+        def create(self, *, path=()):
+            return QSPIPins(path=path)
+
+    def __init__(self, *, path=()):
+        super().__init__(QSPIPins.Signature(), path=path)
+
 
 class SPIMemIO(Peripheral, Elaboratable):
     """A wrapper around the memory-mapped SPI flash interface from picosoc,
