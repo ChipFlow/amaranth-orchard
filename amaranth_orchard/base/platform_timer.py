@@ -14,11 +14,11 @@ class PlatformTimer(Peripheral, Elaboratable):
     def __init__(self, width=48, **kwargs):
         super().__init__()
 
-        bank            = self.csr_bank()
+        bank            = self.csr_bank(addr_width=4)
         self._time_low  = bank.csr(32, "rw")
         self._time_high = bank.csr(32, "rw")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
+        self._bridge    = self.bridge(addr_width=4, data_width=32, granularity=8, alignment=2)
         self.bus        = self._bridge.bus
 
         self.width = width

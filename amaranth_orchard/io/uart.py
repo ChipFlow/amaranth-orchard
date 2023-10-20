@@ -1,16 +1,26 @@
 from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out
 
 from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
 
 from ..base.peripheral import Peripheral
 
-class UARTPins(Record):
-    def __init__(self):
-        layout = [
-            ("tx_o", 1),
-            ("rx_i", 1),
-        ]
-        super().__init__(layout)
+
+class UARTPins(wiring.Interface):
+    class Signature(wiring.Signature):
+        def __init__(self):
+            super().__init__({
+                "tx_o": Out(1),
+                "rx_i": In(1),
+            })
+
+        def create(self, *, path=()):
+            return UARTPins(path=path)
+
+    def __init__(self, *, path=()):
+        super().__init__(UARTPins.Signature(), path=path)
+
 
 class UARTPeripheral(Peripheral, Elaboratable):
     """
@@ -29,7 +39,7 @@ class UARTPeripheral(Peripheral, Elaboratable):
         self.init_divisor = init_divisor
         self.pins = pins
 
-        bank            = self.csr_bank()
+        bank            = self.csr_bank(addr_width=5)
         self.tx_data    = bank.csr(8, "w")
         self.rx_data    = bank.csr(8, "r")
 
@@ -38,7 +48,7 @@ class UARTPeripheral(Peripheral, Elaboratable):
 
         self.divisor    = bank.csr(24, "rw")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
+        self._bridge    = self.bridge(addr_width=3, data_width=32, granularity=8, alignment=2)
         self.bus        = self._bridge.bus
 
     def elaborate(self, platform):

@@ -22,13 +22,18 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from math import ceil
+
 from amaranth import *
 from amaranth import tracer
 from amaranth.utils import log2_int
+from amaranth.lib import wiring
+from amaranth.lib.wiring import flipped
 
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
+
 
 class Peripheral:
     """Wishbone peripheral.
@@ -47,13 +52,13 @@ class Peripheral:
     class ExamplePeripheral(Peripheral, Elaboratable):
         def __init__(self):
             super().__init__()
-            bank         = self.csr_bank()
+            bank         = self.csr_bank(addr_width=1)
             self._foo    = bank.csr(8, "r")
             self._bar    = bank.csr(8, "w")
 
             self._rdy    = self.event(mode="rise")
 
-            self._bridge = self.bridge(data_width=32, granularity=8, alignment=2)
+            self._bridge = self.bridge(addr_width=4, data_width=32, granularity=8, alignment=2)
             self.bus     = self._bridge.bus
             self.irq     = self._bridge.irq
 
@@ -106,9 +111,13 @@ class Peripheral:
 
     @bus.setter
     def bus(self, bus):
-        if not isinstance(bus, wishbone.Interface):
+        if isinstance(bus, wiring.FlippedInterface):
+            bus_unflipped = flipped(bus)
+        else:
+            bus_unflipped = bus
+        if not isinstance(bus_unflipped, wishbone.Interface):
             raise TypeError("Bus interface must be an instance of wishbone.Interface, not {!r}"
-                            .format(bus))
+                            .format(bus_unflipped))
         self._bus = bus
 
     @property
@@ -135,7 +144,7 @@ class Peripheral:
                             .format(irq))
         self._irq = irq
 
-    def csr_bank(self, *, name=None, addr=None, alignment=None):
+    def csr_bank(self, *, addr_width, name=None, addr=None, alignment=None):
         """Request a CSR bank.
 
         Arguments
@@ -154,7 +163,7 @@ class Peripheral:
         ------------
         An instance of :class:`CSRBank`.
         """
-        bank = CSRBank(name=name)
+        bank = CSRBank(addr_width=addr_width, name=name)
         self._csr_banks.append((bank, addr, alignment))
         return bank
 
@@ -169,7 +178,7 @@ class Peripheral:
         An instance of :class:`amaranth_soc.wishbone.Interface`.
         """
         window = wishbone.Interface(addr_width=addr_width, data_width=data_width,
-                                    granularity=granularity, features=features, name=name)
+                                    granularity=granularity, features=features, path=(name,))
         self._windows.append((window, addr, sparse))
         return window
 
@@ -186,7 +195,7 @@ class Peripheral:
         self._events.append(event)
         return event
 
-    def bridge(self, *, data_width=8, granularity=None, features=frozenset(), alignment=0):
+    def bridge(self, *, addr_width, data_width, granularity=None, features=frozenset(), alignment=0):
         """Request a bridge to the resources of the peripheral.
 
         See :class:`PeripheralBridge` for details.
@@ -195,8 +204,8 @@ class Peripheral:
         ------------
         A :class:`PeripheralBridge` providing access to local resources.
         """
-        return PeripheralBridge(self, data_width=data_width, granularity=granularity,
-                                features=features, alignment=alignment)
+        return PeripheralBridge(self, addr_width=addr_width, data_width=data_width,
+                                granularity=granularity, features=features, alignment=alignment)
 
     def iter_csr_banks(self):
         """Iterate requested CSR banks and their parameters.
@@ -238,12 +247,15 @@ class CSRBank:
     name : str
         Optional. Name prefix of the bank registers.
     """
-    def __init__(self, *, name=None):
+    def __init__(self, *, addr_width, name=None):
+        if not isinstance(addr_width, int) or addr_width < 0:
+            raise TypeError("Address width must be an integer, not {!r}".format(addr_width))
         if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a string, not {!r}".format(name))
 
-        self.name      = name
-        self._csr_regs = []
+        self.addr_width = addr_width
+        self.name       = name
+        self._csr_regs  = dict()
 
     def csr(self, width, access, *, addr=None, alignment=None, name=None,
             src_loc_at=0):
@@ -271,10 +283,10 @@ class CSRBank:
             raise TypeError("Name must be a string, not {!r}".format(name))
         name = name or tracer.get_var_name(depth=2 + src_loc_at).lstrip("_")
 
-        if any(elem.name == name for (elem, _, _) in self._csr_regs):
+        if name in self._csr_regs:
             raise Exception("CSR \"{}\" has already been defined".format(name))
-        elem = csr.Element(width, access, name=name)
-        self._csr_regs.append((elem, addr, alignment))
+        elem = csr.Element(width, access, path=(name,))
+        self._csr_regs[name] = (elem, addr, alignment)
         return elem
 
     def iter_csr_regs(self):
@@ -284,8 +296,8 @@ class CSRBank:
         ------------
         A tuple ``elem, addr, alignment`` describing the register and its parameters.
         """
-        for elem, addr, alignment in self._csr_regs:
-            yield elem, addr, alignment
+        for elem_name, (elem, addr, alignment) in self._csr_regs.items():
+            yield elem, elem_name, addr, alignment
 
 
 class PeripheralBridge(Elaboratable):
@@ -300,6 +312,8 @@ class PeripheralBridge(Elaboratable):
     ---------
     periph : :class:`Peripheral`
         The peripheral whose resources are exposed by this bridge.
+    addr_width : int
+        Address width. See :class:`amaranth_soc.wishbone.Interface`.
     data_width : int
         Data width. See :class:`amaranth_soc.wishbone.Interface`.
     granularity : int or None
@@ -317,49 +331,51 @@ class PeripheralBridge(Elaboratable):
         Interrupt request. It is raised if any event source is enabled and has a pending
         notification.
     """
-    def __init__(self, periph, *, data_width, granularity, features, alignment):
+    def __init__(self, periph, *, addr_width, data_width, granularity, features, alignment):
         if not isinstance(periph, Peripheral):
             raise TypeError("Peripheral must be an instance of Peripheral, not {!r}"
                             .format(periph))
 
-        self._wb_decoder = wishbone.Decoder(addr_width=1, data_width=data_width,
-                                            granularity=granularity,
-                                            features=features, alignment=alignment,
-                                            name=periph.name)
+        self._wb_decoder = wishbone.Decoder(addr_width=addr_width, data_width=data_width,
+                                            granularity=granularity, features=features,
+                                            alignment=alignment, name=periph.name)
 
         self._csr_subs = []
 
         for bank, bank_addr, bank_alignment in periph.iter_csr_banks():
             if bank_alignment is None:
                 bank_alignment = alignment
-            csr_mux = csr.Multiplexer(
-                addr_width=1, data_width=granularity, alignment=bank_alignment,
-                name=bank.name,
-            )
-            for elem, elem_addr, elem_alignment in bank.iter_csr_regs():
+            csr_mux = csr.Multiplexer(addr_width=bank.addr_width, data_width=granularity,
+                                      alignment=bank_alignment, name=bank.name)
+            for elem, elem_name, elem_addr, elem_alignment in bank.iter_csr_regs():
                 if elem_alignment is None:
                     elem_alignment = alignment
-                csr_mux.add(elem, addr=elem_addr, alignment=elem_alignment, extend=True)
+                csr_mux.add(elem, addr=elem_addr, alignment=elem_alignment, name=elem_name)
 
             csr_bridge = WishboneCSRBridge(csr_mux.bus, data_width=data_width)
-            self._wb_decoder.add(csr_bridge.wb_bus, addr=bank_addr, extend=True)
+            self._wb_decoder.add(csr_bridge.wb_bus, addr=bank_addr)
             self._csr_subs.append((csr_mux, csr_bridge))
 
         for window, window_addr, window_sparse in periph.iter_windows():
-            self._wb_decoder.add(window, addr=window_addr, sparse=window_sparse, extend=True)
+            self._wb_decoder.add(window, addr=window_addr, sparse=window_sparse)
 
         events = list(periph.iter_events())
         if len(events) > 0:
             self._int_src = InterruptSource(events, name=periph.name)
             self.irq      = self._int_src.irq
 
-            csr_mux = csr.Multiplexer(addr_width=1, data_width=8, alignment=alignment, name="ev")
-            csr_mux.add(self._int_src.status,  extend=True)
-            csr_mux.add(self._int_src.pending, extend=True)
-            csr_mux.add(self._int_src.enable,  extend=True)
+            ev_data_width = 8
+            ev_elem_size  = ceil(len(events) / ev_data_width)
+            ev_addr_width = 2 + max(log2_int(ev_elem_size, need_pow2=False), alignment)
+
+            csr_mux = csr.Multiplexer(addr_width=ev_addr_width, data_width=ev_data_width,
+                                      alignment=alignment, name="ev")
+            csr_mux.add(self._int_src.status)
+            csr_mux.add(self._int_src.pending)
+            csr_mux.add(self._int_src.enable)
 
             csr_bridge = WishboneCSRBridge(csr_mux.bus, data_width=data_width)
-            self._wb_decoder.add(csr_bridge.wb_bus, extend=True)
+            self._wb_decoder.add(csr_bridge.wb_bus)
             self._csr_subs.append((csr_mux, csr_bridge))
         else:
             self._int_src = None

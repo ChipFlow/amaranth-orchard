@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out
 
 from amaranth.sim import Simulator, Delay, Settle
 
@@ -17,20 +19,28 @@ from math import ceil, log2
 
 # HyperRAM -----------------------------------------------------------------------------------------
 
-class HyperRAMPins(Record):
-    def __init__(self, cs_count=1):
-        layout = [
-            ("clk_o", 1),
-            ("csn_o", cs_count),
-            ("rstn_o", 1),
-            ("rwds_o", 1),
-            ("rwds_oe", 1),
-            ("rwds_i", 1),
-            ("dq_o", 8),
-            ("dq_oe", 8),
-            ("dq_i", 8),
-        ]
-        super().__init__(layout)
+class HyperRAMPins(wiring.Interface):
+    class Signature(wiring.Signature):
+        def __init__(self, *, cs_count=1):
+            self.cs_count = cs_count
+            super().__init__({
+                "clk_o":   Out(1),
+                "csn_o":   Out(cs_count),
+                "rstn_o":  Out(1),
+                "rwds_o":  Out(1),
+                "rwds_oe": Out(1),
+                "rwds_i":  In(1),
+                "dq_o":    Out(8),
+                "dq_oe":   Out(8),
+                "dq_i":    In(8),
+            })
+
+        def create(self, *, path=()):
+            return HyperRAMPins(cs_count=self.cs_count)
+
+    def __init__(self, *, cs_count=1, path=()):
+        super().__init__(HyperRAMPins.Signature(cs_count=cs_count), path=path)
+
 
 class HyperRAM(Peripheral, Elaboratable):
     """HyperRAM
@@ -48,16 +58,16 @@ class HyperRAM(Peripheral, Elaboratable):
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?
-        memory_map = MemoryMap(addr_width=max(1, ceil(log2(self.size))), data_width=8)
+        memory_map = MemoryMap(addr_width=ceil(log2(self.size)), data_width=8)
         memory_map.add_resource(name=f"hyperram{index}", size=self.size, resource=self)
-        self.data_bus = wishbone.Interface(addr_width=max(1, ceil(log2(self.size / 4))),
-                                           data_width=32, granularity=8, memory_map=memory_map)
+        self.data_bus = wishbone.Interface(addr_width=ceil(log2(self.size / 4)), data_width=32,
+                                           granularity=8, memory_map=memory_map)
 
-        bank               = self.csr_bank()
+        bank               = self.csr_bank(addr_width=3)
         self._ctrl_cfg     = bank.csr(32, "rw", name=f"ctrl_cfg")
         self._hram_cfg     = bank.csr(32, "w", name=f"hram_cfg")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8)
+        self._bridge    = self.bridge(addr_width=3, data_width=32, granularity=8)
         self.ctrl_bus = self._bridge.bus
 
         # Control registers

@@ -13,12 +13,12 @@ class SoCID(Peripheral, Elaboratable):
     def __init__(self, type_id=0xbadca77e, **kwargs):
         super().__init__()
 
-        bank            = self.csr_bank()
+        bank            = self.csr_bank(addr_width=4)
         self.type_id = type_id
         self.soc_type  = bank.csr(32, "r")
         self.soc_version = bank.csr(32, "r")
 
-        self._bridge    = self.bridge(data_width=32, granularity=8, alignment=2)
+        self._bridge    = self.bridge(addr_width=4, data_width=32, granularity=8, alignment=2)
         self.bus        = self._bridge.bus
         self.git_hash = int(subprocess.check_output('git rev-parse --verify HEAD'.split(' ')).strip()[0:8], 16)
 
