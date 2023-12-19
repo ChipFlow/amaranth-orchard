@@ -11,7 +11,7 @@ from ..base.peripheral import Peripheral
 from pathlib import Path
 
 
-class QSPIPins(wiring.Interface):
+class QSPIPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
@@ -40,16 +40,17 @@ class SPIMemIO(Peripheral, Elaboratable):
     def __init__(self, *, flash, **kwargs):
         super().__init__()
 
-        memory_map = MemoryMap(addr_width=24, data_width=8)
-        memory_map.add_resource(name="flash", size=2**24, resource=self)
-        self.data_bus = wishbone.Interface(addr_width=22, data_width=32, granularity=8,
-                                           memory_map=memory_map)
+        data_memory_map = MemoryMap(addr_width=24, data_width=8)
+        data_memory_map.add_resource(name="flash", size=2**24, resource=self)
+        self.data_bus = wishbone.Interface(addr_width=22, data_width=32, granularity=8)
+        self.data_bus.memory_map = data_memory_map
         self.flash = flash
 
-        memory_map = MemoryMap(addr_width=2, data_width=8)
-        memory_map.add_resource(name="flash_ctrl", size=4, resource=self)
-        self.ctrl_bus = wishbone.Interface(addr_width=0, data_width=32, granularity=8,
-                                           memory_map=memory_map)
+        ctrl_memory_map = MemoryMap(addr_width=2, data_width=8)
+        ctrl_memory_map.add_resource(name="flash_ctrl", size=4, resource=self)
+        self.ctrl_bus = wishbone.Interface(addr_width=0, data_width=32, granularity=8)
+        self.ctrl_bus.memory_map = ctrl_memory_map
+
         self.size = 2**24
 
     def elaborate(self, platform):
