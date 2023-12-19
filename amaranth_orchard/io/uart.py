@@ -7,7 +7,7 @@ from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
 from ..base.peripheral import Peripheral
 
 
-class UARTPins(wiring.Interface):
+class UARTPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
