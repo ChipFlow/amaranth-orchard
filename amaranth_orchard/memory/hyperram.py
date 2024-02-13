@@ -7,17 +7,17 @@
 
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.wiring import In, Out
+from amaranth.lib.wiring import In, Out, connect, flipped
+from amaranth.utils import ceil_log2
 
-from amaranth.sim import Simulator, Delay, Settle
+from amaranth.sim import *
 
-from amaranth_soc import wishbone
+from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
-from ..base.peripheral import Peripheral
 
-from math import ceil, log2
 
-# HyperRAM -----------------------------------------------------------------------------------------
+__all__ = ["HyperRAMPins", "HyperRAM"]
+
 
 class HyperRAMPins(wiring.PureInterface):
     class Signature(wiring.Signature):
@@ -39,11 +39,20 @@ class HyperRAMPins(wiring.PureInterface):
             return HyperRAMPins(cs_count=self.cs_count)
 
     def __init__(self, *, cs_count=1, path=()):
-        super().__init__(HyperRAMPins.Signature(cs_count=cs_count), path=path)
+        super().__init__(self.Signature(cs_count=cs_count), path=path)
 
 
-class HyperRAM(Peripheral, Elaboratable):
-    """HyperRAM
+class HyperRAM(wiring.Component):
+    class CtrlConfig(csr.Register, access="rw"):
+        def __init__(self, init_latency):
+            super().__init__({
+                "latency": csr.Field(csr.action.RW, unsigned(4), reset=init_latency),
+            })
+
+    class HRAMConfig(csr.Register, access="w"):
+        val: csr.Field(csr.action.W, unsigned(32))
+
+    """HyperRAM.
 
     Provides a very simple/minimal HyperRAM core that should work with all FPGA/HyperRam chips:
     - FPGA vendor agnostic.
@@ -51,34 +60,37 @@ class HyperRAM(Peripheral, Elaboratable):
 
     This core favors portability and ease of use over performance.
     """
-    def __init__(self, *, pins, init_latency=7, index=0):
-        super().__init__()
+    def __init__(self, *, name, pins, init_latency=7):
         self.pins = pins
         self.cs_count = len(self.pins.csn_o)
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?
 
-        self.data_bus = wishbone.Interface(addr_width=ceil(log2(self.size / 4)), data_width=32,
-                                           granularity=8)
+        regs = csr.Builder(addr_width=3, data_width=8, name=name)
 
-        memory_map = MemoryMap(addr_width=ceil(log2(self.size)), data_width=8)
-        memory_map.add_resource(name=f"hyperram{index}", size=self.size, resource=self)
-        self.data_bus.memory_map = memory_map
+        self._ctrl_cfg = regs.add("ctrl_cfg", self.CtrlConfig(), offset=0x0)
+        self._hram_cfg = regs.add("hram_cfg", self.HRAMConfig(), offset=0x4)
 
-        bank               = self.csr_bank(addr_width=3)
-        self._ctrl_cfg     = bank.csr(32, "rw", name=f"ctrl_cfg")
-        self._hram_cfg     = bank.csr(32, "w", name=f"hram_cfg")
+        self._bridge = csr.Bridge(regs.as_memory_map())
+        ctrl_memory_map = self._bridge.bus.memory_map
 
-        self._bridge    = self.bridge(addr_width=3, data_width=32, granularity=8)
-        self.ctrl_bus = self._bridge.bus
+        data_memory_map = MemoryMap(addr_width=ceil_log2(self.size), data_width=8)
+        data_memory_map.add_resource(name=(name,), size=self.size, resource=self)
 
-        # Control registers
-        self.latency = Signal(4, reset=self.init_latency)
+        super().__init__({
+            "ctrl_bus": csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width),
+            "data_bus": wishbone.Signature(addr_width=ceil_log2(self.size / 4), data_width=32,
+                                           granularity=8),
+        })
+        self.ctrl_bus.memory_map = ctrl_memory_map
+        self.data_bus.memory_map = data_memory_map
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.bridge  = self._bridge
+        m.submodules.bridge = self._bridge
+
+        connect(m, flipped(self.bus), self._bridge.bus)
 
         is_ctrl_write = Signal()
         latched_adr = Signal(len(self.data_bus.adr))
@@ -113,7 +125,6 @@ class HyperRAM(Peripheral, Elaboratable):
             # move shift register (sample/output data) on posedge
             m.d.sync += sr.eq(Cat(self.pins.dq_i, sr[:-8]))
 
-
         m.d.comb += [
             self.pins.clk_o.eq(clk),
             self.pins.csn_o.eq(csn),
@@ -147,9 +158,9 @@ class HyperRAM(Peripheral, Elaboratable):
                         is_ctrl_write.eq(0),
                     ]
                     m.next = "WAIT_CA"
-                with m.If(self._hram_cfg.w_stb): # config register write
+                with m.If(self._hram_cfg.f.val.w_stb): # config register write
                     m.d.sync += [
-                        csn.eq(~(1 << (self._hram_cfg.w_data[16 : 16+ceil(log2(self.cs_count))]))),
+                        csn.eq(~(1 << (self._hram_cfg.f.val.w_data[16:16+ceil_log2(self.cs_count)]))),
                         self.pins.dq_oe.eq(1),
                         counter.eq(6),
                         # Assign CA
@@ -161,7 +172,7 @@ class HyperRAM(Peripheral, Elaboratable):
                         sr[4:16].eq(0), # RFU
                         sr[1:3].eq(0), # lower address
                         sr[0].eq(0), # address LSB (0 for 32-bit xfers)
-                        latched_cfg.eq(self._hram_cfg.w_data[0:16]),
+                        latched_cfg.eq(self._hram_cfg.f.val.w_data[0:16]),
                         is_ctrl_write.eq(1),
                     ]
                     m.next = "WAIT_CA"
@@ -183,9 +194,9 @@ class HyperRAM(Peripheral, Elaboratable):
                     with m.Else():
                         # wait for the specified latency period
                         with m.If(x2_lat):
-                            m.d.sync += counter.eq(4 * self.latency - 2)
+                            m.d.sync += counter.eq(4*self._ctrl_cfg.f.latency.data - 2)
                         with m.Else():
-                            m.d.sync += counter.eq(2 * self.latency - 2)
+                            m.d.sync += counter.eq(2*self._ctrl_cfg.f.latency.data - 2)
                         m.next = "WAIT_LAT"
             with m.State("WAIT_LAT"):
                 m.d.sync += self.pins.dq_oe.eq(0)
@@ -252,12 +263,6 @@ class HyperRAM(Peripheral, Elaboratable):
                     csn.eq((1 << self.cs_count) - 1),
                 ]
                 m.next = "IDLE"
-        # Controller config register
-        m.d.comb += [
-            self._ctrl_cfg.r_data.eq(self.latency)
-        ]
-        with m.If(self._ctrl_cfg.w_stb):
-            m.d.sync += self.latency.eq(self._ctrl_cfg.w_data[0:4])
         return m
 
 def sim():

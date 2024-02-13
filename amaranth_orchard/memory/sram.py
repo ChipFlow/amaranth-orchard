@@ -23,15 +23,17 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from amaranth import *
-from amaranth.utils import log2_int
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In
+from amaranth.utils import exact_log2
 
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
-from amaranth_soc.periph import ConstantMap
 
-from ..base.peripheral import Peripheral
+__all__ = ["SRAMPeripheral"]
 
-class SRAMPeripheral(Peripheral, Elaboratable):
+
+class SRAMPeripheral(wiring.Component):
     """SRAM storage peripheral.
 
     Parameters
@@ -51,9 +53,7 @@ class SRAMPeripheral(Peripheral, Elaboratable):
         Wishbone bus interface.
     """
     # TODO raise bus.err if read-only and a bus write is attempted.
-    def __init__(self, *, size, data_width=32, granularity=8, writable=True, index=0):
-        super().__init__()
-
+    def __init__(self, *, name, size, data_width=32, granularity=8, writable=True):
         if not isinstance(size, int) or size <= 0 or size & size-1:
             raise ValueError("Size must be an integer power of two, not {!r}"
                              .format(size))
@@ -62,17 +62,21 @@ class SRAMPeripheral(Peripheral, Elaboratable):
                              "of {} ({} / {})"
                               .format(size, data_width // granularity, data_width, granularity))
 
-        self._mem = Memory(depth=(size * granularity) // data_width, width=data_width, simulate=False)
+        size_words = (size * granularity) // data_width
+        self._mem  = Memory(depth=size_words, width=data_width, simulate=False)
 
-        memory_map = MemoryMap(addr_width=log2_int(size), data_width=granularity, name=self.name)
-        memory_map.add_resource(name=f"sram{index}", size=size, resource=self._mem)
-        self.bus = wishbone.Interface(addr_width=log2_int(self._mem.depth),
-                                      data_width=self._mem.width, granularity=granularity)
+        super().__init__({
+            "bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=data_width,
+                                         granularity=granularity)),
+        })
+
+        memory_map = MemoryMap(addr_width=exact_log2(size), data_width=granularity)
+        memory_map.add_resource(name=(name,), size=size, resource=self)
         self.bus.memory_map = memory_map
 
-        self.size        = size
+        self.size = size
         self.granularity = granularity
-        self.writable    = writable
+        self.writable = writable
 
     @property
     def init(self):
@@ -82,17 +86,10 @@ class SRAMPeripheral(Peripheral, Elaboratable):
     def init(self, init):
         self._mem.init = init
 
-    @property
-    def constant_map(self):
-        return ConstantMap(
-            SIZE = self.size,
-        )
-
     def elaborate(self, platform):
         m = Module()
 
         incr = Signal.like(self.bus.adr)
-
 
         m.submodules.mem_rp = mem_rp = self._mem.read_port()
         m.d.comb += self.bus.dat_r.eq(mem_rp.data)
