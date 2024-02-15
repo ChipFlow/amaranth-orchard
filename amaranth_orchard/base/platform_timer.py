@@ -4,31 +4,33 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr
 
-from .field import StorageLessRW
-
 
 __all__ = ["PlatformTimer"]
 
 
 class PlatformTimer(wiring.Component):
-    class Time(csr.Register, access="rw"):
+    class CNT(csr.Register, access="r"):
+        """Cycle counter (read-only)."""
         def __init__(self, width):
-            super().__init__({"val": csr.Field(StorageLessRW, unsigned(width))})
+            super().__init__({"val": csr.Field(csr.action.R, unsigned(width))})
 
-    """Platform timer device for SoCs.
+    class CMP(csr.Register, access="rw"):
+        """Comparator (read/write).
 
-    Two CSRs forming a 48-bit timer that can be read to get tick count (upper 16 bits unused).
+        If set to a non-zero value, an interrupt is triggered when CNT is greater than or equal
+        to CMP.
+        """
+        def __init__(self, width):
+            super().__init__({"val": csr.Field(csr.action.RW, unsigned(width))})
 
-    Writing to CSRs, starting with high, then low, schedules an interrupt at the compare value
-    written.
-    """
+    """Platform timer peripheral."""
     def __init__(self, *, name):
         self.width = 48
 
         regs = csr.Builder(addr_width=4, data_width=8, name=name)
 
-        self._time_l = regs.add("time_l", self.Time(32), offset=0x0)
-        self._time_h = regs.add("time_h", self.Time(16), offset=0x4)
+        self._cnt = regs.add("cnt", self.CNT(self.width), offset=0x0)
+        self._cmp = regs.add("cmp", self.CMP(self.width), offset=0x8)
 
         self._bridge = csr.Bridge(regs.as_memory_map())
 
@@ -44,26 +46,10 @@ class PlatformTimer(wiring.Component):
 
         connect(m, flipped(self.bus), self._bridge.bus)
 
-        timer = Signal(self.width)
-        time_cmp = Signal(self.width)
-        time_cmp_valid = Signal(reset=0)
-
         m.d.sync += [
-            timer.eq(timer + 1),
-            self.irq.eq(time_cmp_valid & (timer >= time_cmp)),
+            self._cnt.f.val.r_data.eq(self._cnt.f.val.r_data + 1),
+            self.irq.eq((self._cmp.f.val.data != 0) &
+                        (self._cmp.f.val.data < self._cnt.f.val.r_data)),
         ]
-
-        m.d.comb += Cat(self._time_l.f.val.r_data, self._time_h.f.val.r_data).eq(timer)
-
-        with m.If(self._time_h.f.val.w_stb):
-             m.d.sync += [
-                time_cmp[32:].eq(self._time_h.f.val.w_data),
-                time_cmp_valid.eq(0),
-            ]
-        with m.If(self._time_l.f.val.w_stb):
-             m.d.sync += [
-                time_cmp[:32].eq(self._time_l.f.val.w_data),
-                time_cmp_valid.eq(1),
-            ]
 
         return m
