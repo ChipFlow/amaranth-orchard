@@ -1,64 +1,79 @@
-from math import ceil
-
 from amaranth import *
-from amaranth.utils import log2_int
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out, flipped, connect
 
-from .peripheral import Peripheral
+from amaranth_soc import csr
 
-class GPIOPins(Record):
-    def __init__(self, width):
-        layout = [
-            ("o", width),
-            ("oe", width),
-            ("i", width),
-        ]
-        super().__init__(layout)
 
-class GPIOPeripheral(Peripheral, Elaboratable):
+__all__ = ["GPIOPins", "GPIOPeripheral"]
+
+
+class GPIOPins(wiring.PureInterface):
+    class Signature(wiring.Signature):
+        def __init__(self, width):
+            super().__init__({
+                "o":  Out(unsigned(width)),
+                "oe": Out(unsigned(width)),
+                "i":  In(unsigned(width)),
+            })
+
+        def create(self, *, path=()):
+            return GPIOPins(path=path)
+
+    def __init__(self, width, *, path=()):
+        super().__init__(self.Signature(width), path=path)
+
+
+class GPIOPeripheral(wiring.Component):
+    class DO(csr.Register, access="rw"):
+        """output data (R/W, ignored for pins configured as inputs)"""
+        def __init__(self, width):
+            super().__init__({"pins": csr.Field(csr.action.RW, unsigned(width))})
+
+    class OE(csr.Register, access="rw"):
+        """output enable (R/W) 1=output, 0=input"""
+        def __init__(self, width):
+            super().__init__({"pins": csr.Field(csr.action.RW, unsigned(width))})
+
+    class DI(csr.Register, access="r"):
+        """input data (R)"""
+        def __init__(self, width):
+            super().__init__({"pins": csr.Field(csr.action.R, unsigned(width))})
+
+    """Simple GPIO peripheral.
+
+    All pins default to input at power up.
     """
-    Simple GPIO peripheral
-    3 CSRs, defined by number of pins
-
-     - output data (R/W, ignored for pins configured as inputs)
-     - output enable (R/W) 1=output, 0=input
-     - input data (R/W)
-
-    All pins default to input at power up
-    """
-    def __init__(self, pins, **kwargs):
-        super().__init__()
+    def __init__(self, *, name, pins):
+        if len(pins.o) > 32:
+            raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
 
         self.width = len(pins.o)
-        self.pins = pins
-        alignment = 2
+        self.pins  = pins
 
-        bank_addr_width = 2 + max(log2_int(ceil(self.width / 8), need_pow2=False), alignment)
-        bank            = self.csr_bank(addr_width=bank_addr_width)
-        self._dout      = bank.csr(self.width, "rw")
-        self._oe        = bank.csr(self.width, "rw")
-        self._din       = bank.csr(self.width, "r")
+        regs = csr.Builder(addr_width=4, data_width=8, name=name)
 
-        self._bridge    = self.bridge(addr_width=bank_addr_width - 2, data_width=32, granularity=8,
-                                      alignment=alignment)
-        self.bus        = self._bridge.bus
+        self._do = regs.add("do", self.DO(self.width), offset=0x0)
+        self._oe = regs.add("oe", self.OE(self.width), offset=0x4)
+        self._di = regs.add("di", self.DI(self.width), offset=0x8)
+
+        self._bridge = csr.Bridge(regs.as_memory_map())
+
+        super().__init__({
+            "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+        })
+        self.bus.memory_map = self._bridge.bus.memory_map
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.bridge  = self._bridge
+        m.submodules.bridge = self._bridge
 
-        dout_buf = Signal(self.width)
-        oe_buf = Signal(self.width)
-
-        with m.If(self._dout.w_stb): m.d.sync += dout_buf.eq(self._dout.w_data)
-        with m.If(self._oe.w_stb): m.d.sync += oe_buf.eq(self._oe.w_data)
+        connect(m, flipped(self.bus), self._bridge.bus)
 
         m.d.comb += [
-            self._dout.r_data.eq(dout_buf),
-            self._oe.r_data.eq(oe_buf),
-            self.pins.o.eq(dout_buf),
-            self.pins.oe.eq(oe_buf),
+            self.pins.o .eq(self._do.f.pins.data),
+            self.pins.oe.eq(self._oe.f.pins.data),
         ]
-
-        m.d.sync += self._din.r_data.eq(self.pins.i)
+        m.d.sync += self._di.f.pins.r_data.eq(self.pins.i)
 
         return m

@@ -1,55 +1,55 @@
 from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out, flipped, connect
 
-from .peripheral import Peripheral
+from amaranth_soc import csr
 
-class PlatformTimer(Peripheral, Elaboratable):
-    """Platform timer device for SoCs
-    Two CSRs forming a 48-bit timer that can be read to get tick count
-        (upper 16 bits unused)
 
-    Writing to CSRs, starting with high, then low,
-    schedules an interrupt at the compare value written
-    """
+__all__ = ["PlatformTimer"]
 
-    def __init__(self, width=48, **kwargs):
-        super().__init__()
 
-        bank            = self.csr_bank(addr_width=4)
-        self._time_low  = bank.csr(32, "rw")
-        self._time_high = bank.csr(32, "rw")
+class PlatformTimer(wiring.Component):
+    class CNT(csr.Register, access="r"):
+        """Cycle counter (read-only)."""
+        def __init__(self, width):
+            super().__init__({"val": csr.Field(csr.action.R, unsigned(width))})
 
-        self._bridge    = self.bridge(addr_width=4, data_width=32, granularity=8, alignment=2)
-        self.bus        = self._bridge.bus
+    class CMP(csr.Register, access="rw"):
+        """Comparator (read/write).
 
-        self.width = width
-        self.timer_irq  = Signal()
+        If set to a non-zero value, an interrupt is triggered when CNT is greater than or equal
+        to CMP.
+        """
+        def __init__(self, width):
+            super().__init__({"val": csr.Field(csr.action.RW, unsigned(width))})
+
+    """Platform timer peripheral."""
+    def __init__(self, *, name):
+        self.width = 48
+
+        regs = csr.Builder(addr_width=4, data_width=8, name=name)
+
+        self._cnt = regs.add("cnt", self.CNT(self.width), offset=0x0)
+        self._cmp = regs.add("cmp", self.CMP(self.width), offset=0x8)
+
+        self._bridge = csr.Bridge(regs.as_memory_map())
+
+        super().__init__({
+            "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+            "irq": Out(unsigned(1)),
+        })
+        self.bus.memory_map = self._bridge.bus.memory_map
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.bridge  = self._bridge
+        m.submodules.bridge = self._bridge
 
-        timer = Signal(self.width)
-        time_cmp = Signal(self.width)
-        time_cmp_valid = Signal(reset=0)
+        connect(m, flipped(self.bus), self._bridge.bus)
 
-        m.d.comb += [
-            self._time_high.r_data.eq(timer[32:self.width]),
-            self._time_low.r_data.eq(timer[0:32]),
-        ]
         m.d.sync += [
-            timer.eq(timer + 1),
-            self.timer_irq.eq(time_cmp_valid & (timer >= time_cmp)),
+            self._cnt.f.val.r_data.eq(self._cnt.f.val.r_data + 1),
+            self.irq.eq((self._cmp.f.val.data != 0) &
+                        (self._cmp.f.val.data <= self._cnt.f.val.r_data)),
         ]
-
-        with m.If(self._time_high.w_stb.any()):
-             m.d.sync += [
-                time_cmp[32:self.width].eq(self._time_high.w_data),
-                time_cmp_valid.eq(0),
-            ]
-        with m.If(self._time_low.w_stb.any()):
-             m.d.sync += [
-                time_cmp[0:32].eq(self._time_low.w_data),
-                time_cmp_valid.eq(1),
-            ]
 
         return m
