@@ -1,15 +1,12 @@
 from pathlib import Path
 
 from amaranth import *
-from amaranth.lib import wiring
+from amaranth.lib import coding, wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 from amaranth.utils import exact_log2
 
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
-
-from ..base.field import StorageLessRW
-
 
 __all__ = ["QSPIPins", "SPIMemIO"]
 
@@ -33,8 +30,25 @@ class QSPIPins(wiring.PureInterface):
 
 
 class SPIMemIO(wiring.Component):
-    class ConfigReg(csr.Register, access="rw"):
-        val: csr.Field(StorageLessRW, unsigned(8))
+    class _ControlBridge(wiring.Component):
+        bus: In(csr.Signature(addr_width=exact_log2(4), data_width=8))
+        cfgreg_we: Out(unsigned(4))
+        cfgreg_di: Out(unsigned(32))
+        cfgreg_do: In(unsigned(32))
+
+        def elaborate(self, platform):
+            m = Module()
+            m.submodules.addr_dec = addr_dec = coding.Decoder(width=4)
+            m.d.comb += addr_dec.i.eq(self.bus.addr)
+            m.d.sync += [
+                self.cfgreg_we.eq(Mux(self.bus.w_stb, addr_dec.o, 0)),
+                self.cfgreg_di.eq(self.bus.w_data.replicate(4)),
+                # The CSR bus interface must output zero when idle.
+                self.bus.r_data.eq(Mux(self.bus.r_stb,
+                                       self.cfgreg_do.word_select(self.bus.addr, 8),
+                                       0)),
+            ]
+            return m
 
     """A wrapper around the memory-mapped SPI flash interface from picosoc,
     suitable for XIP.
@@ -47,31 +61,25 @@ class SPIMemIO(wiring.Component):
         self.size  = 2**24
         size_words = (self.size * 8) // 32
 
-        regs = csr.Builder(addr_width=2, data_width=8, name=name)
-
-        self._cfgreg = {}
-        for n in range(4):
-            with regs.Index(n):
-                self._cfgreg[n] = regs.add("cfgreg", self.ConfigReg())
-
-        self._bridge = csr.Bridge(regs.as_memory_map())
-
-        data_memory_map = MemoryMap(addr_width=exact_log2(self.size), data_width=8)
-        data_memory_map.add_resource(name=(name,), size=self.size, resource=self)
-
         super().__init__({
-            "ctrl_bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+            "ctrl_bus": In(csr.Signature(addr_width=exact_log2(4), data_width=8)),
             "data_bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=32,
                                               granularity=8)),
         })
-        self.ctrl_bus.memory_map = self._bridge.bus.memory_map
+
+        ctrl_memory_map = MemoryMap(addr_width=exact_log2(4), data_width=8)
+        ctrl_memory_map.add_resource(name=(name,), size=4, resource=self)
+        self.ctrl_bus.memory_map = ctrl_memory_map
+
+        data_memory_map = MemoryMap(addr_width=exact_log2(self.size), data_width=8)
+        data_memory_map.add_resource(name=(name,), size=self.size, resource=self)
         self.data_bus.memory_map = data_memory_map
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.bridge = self._bridge
+        m.submodules.ctrl_bridge = ctrl_bridge = self._ControlBridge()
 
-        connect(m, flipped(self.ctrl_bus), self._bridge.bus)
+        connect(m, flipped(self.ctrl_bus), ctrl_bridge.bus)
 
         spi_ready = Signal()
         # TODO : QSPI
@@ -98,9 +106,9 @@ class SPIMemIO(wiring.Component):
             i_flash_io1_di=self.flash.d_i[1],
             i_flash_io2_di=self.flash.d_i[2],
             i_flash_io3_di=self.flash.d_i[3],
-            i_cfgreg_we=Cat(self._cfgreg[n].f.val.w_stb  for n in range(4)),
-            i_cfgreg_di=Cat(self._cfgreg[n].f.val.w_data for n in range(4)),
-            o_cfgreg_do=Cat(self._cfgreg[n].f.val.r_data for n in range(4)),
+            i_cfgreg_we=ctrl_bridge.cfgreg_we,
+            i_cfgreg_di=ctrl_bridge.cfgreg_di,
+            o_cfgreg_do=ctrl_bridge.cfgreg_do,
         )
         # From https://github.com/im-tomu/foboot/blob/master/hw/rtl/picorvspi.py
         read_active = Signal()
