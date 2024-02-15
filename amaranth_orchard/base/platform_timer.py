@@ -49,7 +49,7 @@ class PlatformTimer(wiring.Component):
         m.d.sync += [
             self._cnt.f.val.r_data.eq(self._cnt.f.val.r_data + 1),
             self.irq.eq((self._cmp.f.val.data != 0) &
-                        (self._cmp.f.val.data < self._cnt.f.val.r_data)),
+                        (self._cmp.f.val.data <= self._cnt.f.val.r_data)),
         ]
 
         return m
