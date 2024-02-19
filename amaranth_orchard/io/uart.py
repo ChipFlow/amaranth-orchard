@@ -45,7 +45,7 @@ class UARTPeripheral(wiring.Component):
         """baud divider, defaults to init_divisor"""
         def __init__(self, init_divisor):
             super().__init__({
-                "val": csr.Field(csr.action.RW, unsigned(24), reset=init_divisor),
+                "val": csr.Field(csr.action.RW, unsigned(24), init=init_divisor),
             })
 
     """

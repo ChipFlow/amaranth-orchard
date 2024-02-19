@@ -46,7 +46,7 @@ class HyperRAM(wiring.Component):
     class CtrlConfig(csr.Register, access="rw"):
         def __init__(self, init_latency):
             super().__init__({
-                "latency": csr.Field(csr.action.RW, unsigned(4), reset=init_latency),
+                "latency": csr.Field(csr.action.RW, unsigned(4), init=init_latency),
             })
 
     class HRAMConfig(csr.Register, access="w"):
