@@ -35,11 +35,11 @@ class HyperRAMPins(wiring.PureInterface):
                 "dq_i":    In(8),
             })
 
-        def create(self, *, path=()):
-            return HyperRAMPins(cs_count=self.cs_count)
+        def create(self, *, path=(), src_loc_at=0):
+            return HyperRAMPins(cs_count=self.cs_count, src_loc_at=1 + src_loc_at)
 
-    def __init__(self, *, cs_count=1, path=()):
-        super().__init__(self.Signature(cs_count=cs_count), path=path)
+    def __init__(self, *, cs_count=1, path=(), src_loc_at=0):
+        super().__init__(self.Signature(cs_count=cs_count), path=path, src_loc_at=1 + src_loc_at)
 
 
 class HyperRAM(wiring.Component):

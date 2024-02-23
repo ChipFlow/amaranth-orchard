@@ -11,17 +11,22 @@ __all__ = ["GPIOPins", "GPIOPeripheral"]
 class GPIOPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self, width):
+            self._width = width
             super().__init__({
                 "o":  Out(unsigned(width)),
                 "oe": Out(unsigned(width)),
                 "i":  In(unsigned(width)),
             })
 
-        def create(self, *, path=()):
-            return GPIOPins(path=path)
+        @property
+        def width(self):
+            return self._width
 
-    def __init__(self, width, *, path=()):
-        super().__init__(self.Signature(width), path=path)
+        def create(self, *, path=(), src_loc_at=0):
+            return GPIOPins(width=self.width, path=path, src_loc_at=1 + src_loc_at)
+
+    def __init__(self, width, *, path=(), src_loc_at=0):
+        super().__init__(self.Signature(width), path=path, src_loc_at=1 + src_loc_at)
 
 
 class GPIOPeripheral(wiring.Component):
