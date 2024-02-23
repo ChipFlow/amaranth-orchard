@@ -121,8 +121,9 @@ class SPIMemIO(wiring.Component):
         with m.Else():
             m.d.sync += self.data_bus.ack.eq(0)
 
-        path = Path(__file__).parent / f"verilog/spimemio.v"
-        with open(path, 'r') as f:
-            platform.add_file(path.name, f)
+        if platform is not None:
+            path = Path(__file__).parent / f"verilog/spimemio.v"
+            with open(path, 'r') as f:
+                platform.add_file(path.name, f)
 
         return m
