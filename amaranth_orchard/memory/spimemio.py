@@ -22,11 +22,11 @@ class QSPIPins(wiring.PureInterface):
                 "d_i":   In(4),
             })
 
-        def create(self, *, path=()):
-            return QSPIPins(path=path)
+        def create(self, *, path=(), src_loc_at=0):
+            return QSPIPins(path=path, src_loc_at=1 + src_loc_at)
 
-    def __init__(self, *, path=()):
-        super().__init__(self.Signature(), path=path)
+    def __init__(self, *, path=(), src_loc_at=0):
+        super().__init__(self.Signature(), path=path, src_loc_at=1 + src_loc_at)
 
 
 class SPIMemIO(wiring.Component):
@@ -121,8 +121,9 @@ class SPIMemIO(wiring.Component):
         with m.Else():
             m.d.sync += self.data_bus.ack.eq(0)
 
-        path = Path(__file__).parent / f"verilog/spimemio.v"
-        with open(path, 'r') as f:
-            platform.add_file(path.name, f)
+        if platform is not None:
+            path = Path(__file__).parent / f"verilog/spimemio.v"
+            with open(path, 'r') as f:
+                platform.add_file(path.name, f)
 
         return m

@@ -17,11 +17,11 @@ class UARTPins(wiring.PureInterface):
                 "rx_i": In(1),
             })
 
-        def create(self, *, path=()):
-            return UARTPins(path=path)
+        def create(self, *, path=(), src_loc_at=0):
+            return UARTPins(path=path, src_loc_at=1 + src_loc_at)
 
-    def __init__(self, *, path=()):
-        super().__init__(self.Signature(), path=path)
+    def __init__(self, *, path=(), src_loc_at=0):
+        super().__init__(self.Signature(), path=path, src_loc_at=1 + src_loc_at)
 
 
 class UARTPeripheral(wiring.Component):
