@@ -1,0 +1,27 @@
+# Project metadata
+
+[tool.pdm.version]
+source = "scm"
+
+[project]
+name = "amaranth-orchard"
+dynamic = ["version"]
+description = "curated collection of Amaranth cores"
+authors = [
+    {name = "Myrtle Shah", email = "gatecat@ds0.me" },
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE.txt"}
+
+requires-python = "~=3.8"
+dependencies = [
+    "amaranth @ git+https://github.com/amaranth-lang/amaranth",
+]
+
+# Build system configuration
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+# Development workflow configuration
