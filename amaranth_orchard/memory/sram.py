@@ -23,7 +23,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from amaranth import *
-from amaranth.lib import wiring
+from amaranth.lib import wiring, memory
 from amaranth.lib.wiring import In
 from amaranth.utils import exact_log2
 
@@ -63,7 +63,7 @@ class SRAMPeripheral(wiring.Component):
                               .format(size, data_width // granularity, data_width, granularity))
 
         size_words = (size * granularity) // data_width
-        self._mem  = Memory(depth=size_words, width=data_width, simulate=False)
+        self._mem  = memory.Memory(depth=size_words, shape=data_width, init=[])
 
         super().__init__({
             "bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=data_width,
@@ -88,10 +88,11 @@ class SRAMPeripheral(wiring.Component):
 
     def elaborate(self, platform):
         m = Module()
+        m.submodules.mem = self._mem
 
         incr = Signal.like(self.bus.adr)
 
-        m.submodules.mem_rp = mem_rp = self._mem.read_port()
+        mem_rp = self._mem.read_port()
         m.d.comb += self.bus.dat_r.eq(mem_rp.data)
 
         with m.If(self.bus.cyc & self.bus.stb):
@@ -102,7 +103,7 @@ class SRAMPeripheral(wiring.Component):
             m.d.sync += self.bus.ack.eq(0)
 
         if self.writable:
-            m.submodules.mem_wp = mem_wp = self._mem.write_port(granularity=self.granularity)
+            mem_wp = self._mem.write_port(granularity=self.granularity)
             m.d.comb += mem_wp.addr.eq(mem_rp.addr)
             m.d.comb += mem_wp.data.eq(self.bus.dat_w)
             with m.If(self.bus.cyc & self.bus.stb & self.bus.we):
