@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from amaranth import *
-from amaranth.lib import coding, wiring
+from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 from amaranth.utils import exact_log2
 
@@ -38,10 +38,10 @@ class SPIMemIO(wiring.Component):
 
         def elaborate(self, platform):
             m = Module()
-            m.submodules.addr_dec = addr_dec = coding.Decoder(width=4)
-            m.d.comb += addr_dec.i.eq(self.bus.addr)
+            cfgreg_we_next = Signal.like(self.cfgreg_we)
+            m.d.comb += cfgreg_we_next.bit_select(self.bus.addr, 1).eq(1)
             m.d.sync += [
-                self.cfgreg_we.eq(Mux(self.bus.w_stb, addr_dec.o, 0)),
+                self.cfgreg_we.eq(Mux(self.bus.w_stb, cfgreg_we_next, 0)),
                 self.cfgreg_di.eq(self.bus.w_data.replicate(4)),
                 # The CSR bus interface must output zero when idle.
                 self.bus.r_data.eq(Mux(self.bus.r_stb,
