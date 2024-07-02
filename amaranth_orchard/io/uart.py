@@ -53,11 +53,11 @@ class UARTPeripheral(wiring.Component):
 
     TODO: Interrupts support, perhaps mimic something with upstream Linux kernel support...
     """
-    def __init__(self, *, name, init_divisor, pins):
+    def __init__(self, *, init_divisor, pins):
         self.init_divisor = init_divisor
         self.pins = pins
 
-        regs = csr.Builder(addr_width=5, data_width=8, name=name)
+        regs = csr.Builder(addr_width=5, data_width=8)
 
         self._tx_data  = regs.add("tx_data",  self.TxData(),  offset=0x00)
         self._rx_data  = regs.add("rx_data",  self.RxData(),  offset=0x04)

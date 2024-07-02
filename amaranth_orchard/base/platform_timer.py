@@ -24,10 +24,10 @@ class PlatformTimer(wiring.Component):
             super().__init__({"val": csr.Field(csr.action.RW, unsigned(width))})
 
     """Platform timer peripheral."""
-    def __init__(self, *, name):
+    def __init__(self):
         self.width = 48
 
-        regs = csr.Builder(addr_width=4, data_width=8, name=name)
+        regs = csr.Builder(addr_width=4, data_width=8)
 
         self._cnt = regs.add("cnt", self.CNT(self.width), offset=0x0)
         self._cmp = regs.add("cmp", self.CMP(self.width), offset=0x8)
