@@ -49,14 +49,14 @@ class GPIOPeripheral(wiring.Component):
 
     All pins default to input at power up.
     """
-    def __init__(self, *, name, pins):
+    def __init__(self, *, pins):
         if len(pins.o) > 32:
             raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
 
         self.width = len(pins.o)
         self.pins  = pins
 
-        regs = csr.Builder(addr_width=4, data_width=8, name=name)
+        regs = csr.Builder(addr_width=4, data_width=8)
 
         self._do = regs.add("do", self.DO(self.width), offset=0x0)
         self._oe = regs.add("oe", self.OE(self.width), offset=0x4)

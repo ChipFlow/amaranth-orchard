@@ -21,11 +21,11 @@ class SoCID(wiring.Component):
     Two read-only CSRs; the first contains a SoC-defined type ID and the second the git hash of the
     repo being used to build the SoC.
     """
-    def __init__(self, *, name, type_id=0xbadca77e):
+    def __init__(self, *, type_id=0xbadca77e):
         self.type_id  = type_id
         self.git_hash = int(subprocess.check_output('git rev-parse --verify HEAD'.split(' ')).strip()[0:8], base=16)
 
-        regs = csr.Builder(addr_width=4, data_width=8, name=name)
+        regs = csr.Builder(addr_width=4, data_width=8)
 
         self._soc_type    = regs.add("soc_type",    self.Register(32), offset=0x0)
         self._soc_version = regs.add("soc_version", self.Register(32), offset=0x4)
