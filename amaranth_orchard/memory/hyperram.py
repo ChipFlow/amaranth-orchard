@@ -60,7 +60,7 @@ class HyperRAM(wiring.Component):
 
     This core favors portability and ease of use over performance.
     """
-    def __init__(self, *, pins, init_latency=7):
+    def __init__(self, mem_name=("mem",), *, pins, init_latency=7):
         self.pins = pins
         self.cs_count = len(self.pins.csn_o)
         self.size = 2**23 * self.cs_count # 8MB per CS pin
@@ -76,7 +76,7 @@ class HyperRAM(wiring.Component):
         ctrl_memory_map = self._bridge.bus.memory_map
 
         data_memory_map = MemoryMap(addr_width=ceil_log2(self.size), data_width=8)
-        data_memory_map.add_resource(name=("mem",), size=self.size, resource=self)
+        data_memory_map.add_resource(name=mem_name, size=self.size, resource=self)
 
         super().__init__({
             "ctrl_bus": csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width),
