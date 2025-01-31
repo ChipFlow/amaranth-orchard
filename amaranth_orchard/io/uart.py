@@ -1,9 +1,11 @@
-from amaranth import *
+from amaranth import Module, Signal, unsigned
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr
 from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
+
+from chipflow_lib.platforms import OutputPinSignature, InputPinSignature
 
 
 __all__ = ["UARTPins", "UARTPeripheral"]
@@ -13,8 +15,8 @@ class UARTPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "tx_o": Out(1),
-                "rx_i": In(1),
+                "tx": Out(OutputPinSignature(1)),
+                "rx": In(InputPinSignature(1)),
             })
 
         def create(self, *, path=(), src_loc_at=0):
@@ -80,7 +82,7 @@ class UARTPeripheral(wiring.Component):
 
         m.submodules.tx = tx = AsyncSerialTX(divisor=self.init_divisor, divisor_bits=24)
         m.d.comb += [
-            self.pins.tx_o.eq(tx.o),
+            self.pins.tx.o.eq(tx.o),
             tx.data.eq(self._tx_data.f.val.w_data),
             tx.ack.eq(self._tx_data.f.val.w_stb),
             self._tx_rdy.f.val.r_data.eq(tx.rdy),
@@ -102,7 +104,7 @@ class UARTPeripheral(wiring.Component):
             ]
 
         m.d.comb += [
-            rx.i.eq(self.pins.rx_i),
+            rx.i.eq(self.pins.rx.i),
             rx.ack.eq(~rx_avail),
             rx.divisor.eq(self._divisor.f.val.data),
             self._rx_data.f.val.r_data.eq(rx_buf),
