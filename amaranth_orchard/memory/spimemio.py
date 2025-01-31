@@ -56,7 +56,8 @@ class SPIMemIO(wiring.Component):
     - ctrl_bus is the original 32-bit control register
     - data_bus is a bus peripheral that directly maps the 16MB of read-only flash memory.
     """
-    def __init__(self, *, flash):
+
+    def __init__(self, mem_name=("mem",), cfg_name=("cfg",), *, flash):
         self.flash = flash
         self.size  = 2**24
         size_words = (self.size * 8) // 32
@@ -68,11 +69,11 @@ class SPIMemIO(wiring.Component):
         })
 
         ctrl_memory_map = MemoryMap(addr_width=exact_log2(4), data_width=8)
-        ctrl_memory_map.add_resource(name=("cfg",), size=4, resource=self)
+        ctrl_memory_map.add_resource(name=cfg_name, size=4, resource=self)
         self.ctrl_bus.memory_map = ctrl_memory_map
 
         data_memory_map = MemoryMap(addr_width=exact_log2(self.size), data_width=8)
-        data_memory_map.add_resource(name=("mem",), size=self.size, resource=self)
+        data_memory_map.add_resource(name=mem_name, size=self.size, resource=self)
         self.data_bus.memory_map = data_memory_map
 
     def elaborate(self, platform):
