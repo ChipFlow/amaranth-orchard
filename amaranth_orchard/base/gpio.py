@@ -1,9 +1,10 @@
-from amaranth import *
+from amaranth import Module, unsigned
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr
 
+from chipflow_lib.platforms import BidirPinSignature
 
 __all__ = ["GPIOPins", "GPIOPeripheral"]
 
@@ -11,12 +12,13 @@ __all__ = ["GPIOPins", "GPIOPeripheral"]
 class GPIOPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self, width):
+            if width > 32:
+                raise ValueError(f"Pin width must be lesser than or equal to 32, not {width}")
             self._width = width
-            super().__init__({
-                "o":  Out(unsigned(width)),
-                "oe": Out(unsigned(width)),
-                "i":  In(unsigned(width)),
-            })
+            super().__init__(
+                # each pin has seperate output enable
+                {f"gpio{n}":Out(BidirPinSignature(1)) for n in range(width)}
+            )
 
         @property
         def width(self):
@@ -27,6 +29,10 @@ class GPIOPins(wiring.PureInterface):
 
     def __init__(self, width, *, path=(), src_loc_at=0):
         super().__init__(self.Signature(width), path=path, src_loc_at=1 + src_loc_at)
+    
+    @property  
+    def width(self):
+        return self.signature.width
 
 
 class GPIOPeripheral(wiring.Component):
@@ -45,15 +51,12 @@ class GPIOPeripheral(wiring.Component):
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.R, unsigned(width))})
 
-    """Simple GPIO peripheral.
+    def __init__(self, *, pins: GPIOPins):
+        """Simple GPIO peripheral.
 
-    All pins default to input at power up.
-    """
-    def __init__(self, *, pins):
-        if len(pins.o) > 32:
-            raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
-
-        self.width = len(pins.o)
+        All pins default to input at power up.
+        """
+        self.width = pins.width
         self.pins  = pins
 
         regs = csr.Builder(addr_width=4, data_width=8)
@@ -75,10 +78,8 @@ class GPIOPeripheral(wiring.Component):
 
         connect(m, flipped(self.bus), self._bridge.bus)
 
-        m.d.comb += [
-            self.pins.o .eq(self._do.f.pins.data),
-            self.pins.oe.eq(self._oe.f.pins.data),
-        ]
-        m.d.sync += self._di.f.pins.r_data.eq(self.pins.i)
+        m.d.comb += [ getattr(self.pins, f"gpio{n}").o.eq(self._do.f.pins.data[n]) for n in range(self.width)]
+        m.d.comb += [ getattr(self.pins, f"gpio{n}").oe.eq(self._oe.f.pins.data[n]) for n in range(self.width)]
+        m.d.comb += [ self._di.f.pins.r_data[n].eq(getattr(self.pins, f"gpio{n}").i) for n in range(self.width)]
 
         return m
