@@ -7,14 +7,15 @@
 
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.wiring import In, Out, connect, flipped
+from amaranth.lib.wiring import Out, connect, flipped
 from amaranth.utils import ceil_log2
 
-from amaranth.sim import *
+from amaranth.sim import Simulator
 
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 
+from chipflow_lib.platforms import BidirPinSignature, OutputPinSignature
 
 __all__ = ["HyperRAMPins", "HyperRAM"]
 
@@ -24,15 +25,11 @@ class HyperRAMPins(wiring.PureInterface):
         def __init__(self, *, cs_count=1):
             self.cs_count = cs_count
             super().__init__({
-                "clk_o":   Out(1),
-                "csn_o":   Out(cs_count),
-                "rstn_o":  Out(1),
-                "rwds_o":  Out(1),
-                "rwds_oe": Out(1),
-                "rwds_i":  In(1),
-                "dq_o":    Out(8),
-                "dq_oe":   Out(8),
-                "dq_i":    In(8),
+                "clk":   Out(OutputPinSignature(1)),
+                "csn":   Out(OutputPinSignature(cs_count)),
+                "rstn":  Out(OutputPinSignature(1)),
+                "rwds": Out(BidirPinSignature(1)),
+                "dq":    Out(BidirPinSignature(1)),
             })
 
         def create(self, *, path=(), src_loc_at=0):
@@ -104,7 +101,6 @@ class HyperRAM(wiring.Component):
 
         # Data shift register
         sr = Signal(48)
-        sr_shift = Signal()
 
         # Whether or not we need to apply x2 latency
         x2_lat = Signal()

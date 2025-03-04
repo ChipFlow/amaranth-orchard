@@ -7,6 +7,7 @@ from amaranth.utils import exact_log2
 
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
+from chipflow_lib.platforms import BidirPinSignature,OutputPinSignature
 
 __all__ = ["QSPIPins", "SPIMemIO"]
 
@@ -15,12 +16,10 @@ class QSPIPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "clk_o": Out(1),
-                "csn_o": Out(1),
-                "d_o":   Out(4),
-                "d_oe":  Out(4),
-                "d_i":   In(4),
-            })
+                "clk": Out(OutputPinSignature(1)),
+                "csn": Out(OutputPinSignature(1)),
+            } |
+            {f"d{n}": Out(BidirPinSignature(1)) for n in range(4)})
 
         def create(self, *, path=(), src_loc_at=0):
             return QSPIPins(path=path, src_loc_at=1 + src_loc_at)
@@ -63,6 +62,7 @@ class SPIMemIO(wiring.Component):
         size_words = (self.size * 8) // 32
 
         super().__init__({
+            "qspi": Out(QSPIPins.Signature()),
             "ctrl_bus": In(csr.Signature(addr_width=exact_log2(4), data_width=8)),
             "data_bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=32,
                                               granularity=8)),
@@ -85,32 +85,28 @@ class SPIMemIO(wiring.Component):
         spi_ready = Signal()
         # TODO : QSPI
 
-        m.submodules.spimemio = Instance(
-            "spimemio",
-            i_clk=ClockSignal(),
-            i_resetn=~ResetSignal(),
-            i_valid=self.data_bus.cyc & self.data_bus.stb,
-            o_ready=spi_ready,
-            i_addr=Cat(Const(0, 2), self.data_bus.adr), # Hack to force a 1MB offset
-            o_rdata=self.data_bus.dat_r,
-            o_flash_csb=self.flash.csn_o,
-            o_flash_clk=self.flash.clk_o,
-            o_flash_io0_oe=self.flash.d_oe[0],
-            o_flash_io1_oe=self.flash.d_oe[1],
-            o_flash_io2_oe=self.flash.d_oe[2],
-            o_flash_io3_oe=self.flash.d_oe[3],
-            o_flash_io0_do=self.flash.d_o[0],
-            o_flash_io1_do=self.flash.d_o[1],
-            o_flash_io2_do=self.flash.d_o[2],
-            o_flash_io3_do=self.flash.d_o[3],
-            i_flash_io0_di=self.flash.d_i[0],
-            i_flash_io1_di=self.flash.d_i[1],
-            i_flash_io2_di=self.flash.d_i[2],
-            i_flash_io3_di=self.flash.d_i[3],
-            i_cfgreg_we=ctrl_bridge.cfgreg_we,
-            i_cfgreg_di=ctrl_bridge.cfgreg_di,
-            o_cfgreg_do=ctrl_bridge.cfgreg_do,
-        )
+        verilog_map = {
+            "i_clk": ClockSignal(),
+            "i_resetn": ~ResetSignal(),
+            "i_valid": self.data_bus.cyc & self.data_bus.stb,
+            "o_ready": spi_ready,
+            "i_addr": Cat(Const(0, 2), self.data_bus.adr), # Hack to force a 1MB offset
+            "o_rdata": self.data_bus.dat_r,
+            "o_flash_csb": self.qspi.csn.o,
+            "o_flash_clk": self.qspi.clk.o,
+            "i_cfgreg_we": ctrl_bridge.cfgreg_we,
+            "i_cfgreg_di": ctrl_bridge.cfgreg_di,
+            "o_cfgreg_do": ctrl_bridge.cfgreg_do,
+        } | {
+            f"o_flash_io{n}_oe": getattr(self.qspi, f"d{n}").oe for n in range(4)
+        } | {
+            f"o_flash_io{n}_o": getattr(self.qspi, f"d{n}").o for n in range(4)
+        } | {
+            f"o_flash_io{n}_i": getattr(self.qspi, f"d{n}").i for n in range(4) 
+        }
+ 
+        m.submodules.spimemio = Instance("spimemio", **verilog_map)
+
         # From https://github.com/im-tomu/foboot/blob/master/hw/rtl/picorvspi.py
         read_active = Signal()
         with m.If(self.data_bus.stb & self.data_bus.cyc & ~read_active):
@@ -123,7 +119,7 @@ class SPIMemIO(wiring.Component):
             m.d.sync += self.data_bus.ack.eq(0)
 
         if platform is not None:
-            path = Path(__file__).parent / f"verilog/spimemio.v"
+            path = Path(__file__).parent / "verilog/spimemio.v"
             with open(path, 'r') as f:
                 platform.add_file(path.name, f)
 
