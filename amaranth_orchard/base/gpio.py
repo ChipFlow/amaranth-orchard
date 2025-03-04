@@ -57,7 +57,7 @@ class GPIOPeripheral(wiring.Component):
         All pins default to input at power up.
         """
         self.width = pins.width
-        self.pins  = pins
+        self.pins = pins
 
         regs = csr.Builder(addr_width=4, data_width=8)
 
