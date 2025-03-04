@@ -51,11 +51,11 @@ class GPIOPeripheral(wiring.Component):
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.R, unsigned(width))})
 
-    """Simple GPIO peripheral.
-
-    All pins default to input at power up.
-    """
     def __init__(self, *, pins):
+        """Simple GPIO peripheral.
+
+        All pins default to input at power up.
+        """
         if len(pins.o) > 32:
             raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
 
