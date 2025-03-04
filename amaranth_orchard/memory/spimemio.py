@@ -62,6 +62,7 @@ class SPIMemIO(wiring.Component):
         size_words = (self.size * 8) // 32
 
         super().__init__({
+            "qspi": Out(QSPIPins.Signature()),
             "ctrl_bus": In(csr.Signature(addr_width=exact_log2(4), data_width=8)),
             "data_bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=32,
                                               granularity=8)),
@@ -91,13 +92,13 @@ class SPIMemIO(wiring.Component):
             "o_ready": spi_ready,
             "i_addr": Cat(Const(0, 2), self.data_bus.adr), # Hack to force a 1MB offset
             "o_rdata": self.data_bus.dat_r,
-            "o_flash_csb": self.flash.csn.o,
-            "o_flash_clk": self.flash.clk.o,
+            "o_flash_csb": self.qspi.csn.o,
+            "o_flash_clk": self.qspi.clk.o,
             "i_cfgreg_we": ctrl_bridge.cfgreg_we,
             "i_cfgreg_di": ctrl_bridge.cfgreg_di,
             "o_cfgreg_do": ctrl_bridge.cfgreg_do,
         } | {
-            f"o_flash_io{n}_oe": getattr(self.flash, f"d{n}").oe for n in range(4)
+            f"o_flash_io{n}_oe": getattr(self.qspi, f"d{n}").oe for n in range(4)
         } | {
             f"o_flash_io{n}_do": getattr(self.flash, f"d{n}").o for n in range(4)
         } | {
