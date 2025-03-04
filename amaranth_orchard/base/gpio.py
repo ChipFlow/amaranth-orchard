@@ -13,7 +13,7 @@ class GPIOPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self, width):
             if width > 32:
-                raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
+                raise ValueError(f"Pin width must be lesser than or equal to 32, not {width}")
             self._width = width
             super().__init__(
                 # each pin has seperate output enable
@@ -51,14 +51,11 @@ class GPIOPeripheral(wiring.Component):
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.R, unsigned(width))})
 
-    """Simple GPIO peripheral.
+    def __init__(self, *, pins: GPIOPins):
+        """Simple GPIO peripheral.
 
-    All pins default to input at power up.
-    """
-    def __init__(self, *, pins):
-        if len(pins.o) > 32:
-            raise ValueError(f"Pin width must be lesser than or equal to 32, not {len(pins.o)}")
-
+        All pins default to input at power up.
+        """
         self.width = pins.width
         self.pins  = pins
 
