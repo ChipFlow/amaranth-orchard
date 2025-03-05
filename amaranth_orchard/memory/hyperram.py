@@ -5,7 +5,7 @@
 # Copyright (c) 2021-2022 gatecat <gatecat@ds0.me>
 # SPDX-License-Identifier: BSD-2-Clause
 
-from amaranth import Module, ClockSignal, ResetSignal, Signal, unsigned, ClockDomain
+from amaranth import Module, ClockSignal, ResetSignal, Signal, unsigned, ClockDomain, Cat
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 from amaranth.utils import ceil_log2
@@ -46,9 +46,8 @@ class HyperRAM(wiring.Component):
 
     This core favors portability and ease of use over performance.
     """
-    def __init__(self, mem_name=("mem",), *, pins, init_latency=7):
-        self.pins = pins
-        self.cs_count = pins.cs_count
+    def __init__(self, mem_name=("mem",), *, cs_count=1, init_latency=7):
+        self.cs_count = cs_count
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?

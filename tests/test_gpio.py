@@ -145,7 +145,7 @@ class PeripheralTestCase(unittest.TestCase):
             await self._csr_access(ctx, dut, output_addr, r_stb=1, r_data=0xa, w_stb=1, w_data=0x0)
             await ctx.tick()
             self.assertEqual(ctx.get(dut.pins.gpio.oe), 0b1111)
-            self.assertEqual(ctx.get(dut.pins.gpio.o), 0b1111)
+            self.assertEqual(ctx.get(dut.pins.gpio.o), 0b0000)
 
             # - write 0x44 to SetClr (set pins[1] and pins[3]):
             await self._csr_access(ctx, dut, setclr_addr, w_stb=1, w_data=0x44)
