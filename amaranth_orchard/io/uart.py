@@ -16,7 +16,7 @@ class UARTPins(wiring.PureInterface):
         def __init__(self):
             super().__init__({
                 "tx": Out(OutputPinSignature(1)),
-                "rx": In(InputPinSignature(1)),
+                "rx": Out(InputPinSignature(1)),
             })
 
         def create(self, *, path=(), src_loc_at=0):
