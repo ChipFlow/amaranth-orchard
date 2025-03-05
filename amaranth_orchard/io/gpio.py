@@ -66,7 +66,7 @@ class GPIOPeripheral(wiring.Component):
             "pins": Out(self.Signature(pin_count)),
             "alt_mode": Out(unsigned(pin_count)),
         })
-        self.bus.qmemory_map = self._gpio.bus.memory_map
+        self.bus.memory_map = self._gpio.bus.memory_map
 
     def elaborate(self, platform):
         m = Module()
