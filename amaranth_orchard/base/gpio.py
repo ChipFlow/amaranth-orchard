@@ -15,10 +15,9 @@ class GPIOPins(wiring.PureInterface):
             if width > 32:
                 raise ValueError(f"Pin width must be lesser than or equal to 32, not {width}")
             self._width = width
-            super().__init__(
-                # each pin has seperate output enable
-                {f"gpio{n}":Out(BidirPinSignature(1)) for n in range(width)}
-            )
+            super().__init__({
+                "gpio": Out(BidirPinSignature(width, all_have_oe=True))
+            })
 
         @property
         def width(self):
@@ -29,8 +28,8 @@ class GPIOPins(wiring.PureInterface):
 
     def __init__(self, width, *, path=(), src_loc_at=0):
         super().__init__(self.Signature(width), path=path, src_loc_at=1 + src_loc_at)
-    
-    @property  
+
+    @property
     def width(self):
         return self.signature.width
 
@@ -78,8 +77,8 @@ class GPIOPeripheral(wiring.Component):
 
         connect(m, flipped(self.bus), self._bridge.bus)
 
-        m.d.comb += [ getattr(self.pins, f"gpio{n}").o.eq(self._do.f.pins.data[n]) for n in range(self.width)]
-        m.d.comb += [ getattr(self.pins, f"gpio{n}").oe.eq(self._oe.f.pins.data[n]) for n in range(self.width)]
-        m.d.comb += [ self._di.f.pins.r_data[n].eq(getattr(self.pins, f"gpio{n}").i) for n in range(self.width)]
+        m.d.comb += self.pins.gpio.o.eq(self._do.f.pins.data)
+        m.d.comb += self.pins.gpio.oe.eq(self._oe.f.pins.data)
+        m.d.comb += self._di.f.pins.r_data.eq(self.pins.gpio.i)
 
         return m
