@@ -18,8 +18,8 @@ class QSPIPins(wiring.PureInterface):
             super().__init__({
                 "clk": Out(OutputPinSignature(1)),
                 "csn": Out(OutputPinSignature(1)),
-            } |
-            {f"d{n}": Out(BidirPinSignature(1)) for n in range(4)})
+                "d": Out(BidirPinSignature(4, all_have_oe=True)),
+            })
 
         def create(self, *, path=(), src_loc_at=0):
             return QSPIPins(path=path, src_loc_at=1 + src_loc_at)
@@ -98,11 +98,11 @@ class SPIMemIO(wiring.Component):
             "i_cfgreg_di": ctrl_bridge.cfgreg_di,
             "o_cfgreg_do": ctrl_bridge.cfgreg_do,
         } | {
-            f"o_flash_io{n}_oe": getattr(self.qspi, f"d{n}").oe for n in range(4)
+            f"o_flash_io{n}_oe": self.qspi.d.oe[n] for n in range(4)
         } | {
-            f"o_flash_io{n}_do": getattr(self.flash, f"d{n}").o for n in range(4)
+            f"o_flash_io{n}_do": self.qspi.d.o[n] for n in range(4)
         } | {
-            f"i_flash_io{n}_i": getattr(self.flash, f"d{n}").i for n in range(4)
+            f"i_flash_io{n}_di": self.qspi.d.i[n] for n in range(4)
         }
  
         m.submodules.spimemio = Instance("spimemio", **verilog_map)
