@@ -9,10 +9,10 @@ from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 from chipflow_lib.platforms import BidirPinSignature,OutputPinSignature
 
-__all__ = ["QSPIPins", "SPIMemIO"]
+__all__ = ["SPIMemIO"]
 
 
-class QSPIPins(wiring.PureInterface):
+class SPIMemIO(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
@@ -21,14 +21,6 @@ class QSPIPins(wiring.PureInterface):
                 "d": Out(BidirPinSignature(4, all_have_oe=True)),
             })
 
-        def create(self, *, path=(), src_loc_at=0):
-            return QSPIPins(path=path, src_loc_at=1 + src_loc_at)
-
-    def __init__(self, *, path=(), src_loc_at=0):
-        super().__init__(self.Signature(), path=path, src_loc_at=1 + src_loc_at)
-
-
-class SPIMemIO(wiring.Component):
     class _ControlBridge(wiring.Component):
         bus: In(csr.Signature(addr_width=exact_log2(4), data_width=8))
         cfgreg_we: Out(unsigned(4))
@@ -56,13 +48,12 @@ class SPIMemIO(wiring.Component):
     - data_bus is a bus peripheral that directly maps the 16MB of read-only flash memory.
     """
 
-    def __init__(self, mem_name=("mem",), cfg_name=("cfg",), *, flash):
-        self.flash = flash
-        self.size  = 2**24
+    def __init__(self, *, mem_name=("mem",), cfg_name=("cfg",)):
+        self.size = 2**24
         size_words = (self.size * 8) // 32
 
         super().__init__({
-            "qspi": Out(QSPIPins.Signature()),
+            "pins": Out(self.Signature()),
             "ctrl_bus": In(csr.Signature(addr_width=exact_log2(4), data_width=8)),
             "data_bus": In(wishbone.Signature(addr_width=exact_log2(size_words), data_width=32,
                                               granularity=8)),
@@ -90,19 +81,19 @@ class SPIMemIO(wiring.Component):
             "i_resetn": ~ResetSignal(),
             "i_valid": self.data_bus.cyc & self.data_bus.stb,
             "o_ready": spi_ready,
-            "i_addr": Cat(Const(0, 2), self.data_bus.adr), # Hack to force a 1MB offset
+            "i_addr": Cat(Const(0, 2), self.data_bus.adr),  # Hack to force a 1MB offset
             "o_rdata": self.data_bus.dat_r,
-            "o_flash_csb": self.qspi.csn.o,
-            "o_flash_clk": self.qspi.clk.o,
+            "o_flash_csb": self.pins.csn.o,
+            "o_flash_clk": self.pins.clk.o,
             "i_cfgreg_we": ctrl_bridge.cfgreg_we,
             "i_cfgreg_di": ctrl_bridge.cfgreg_di,
             "o_cfgreg_do": ctrl_bridge.cfgreg_do,
         } | {
-            f"o_flash_io{n}_oe": self.qspi.d.oe[n] for n in range(4)
+            f"o_flash_io{n}_oe": self.pins.d.oe[n] for n in range(4)
         } | {
-            f"o_flash_io{n}_do": self.qspi.d.o[n] for n in range(4)
+            f"o_flash_io{n}_do": self.pins.d.o[n] for n in range(4)
         } | {
-            f"i_flash_io{n}_di": self.qspi.d.i[n] for n in range(4)
+            f"i_flash_io{n}_di": self.pins.d.i[n] for n in range(4)
         }
  
         m.submodules.spimemio = Instance("spimemio", **verilog_map)

@@ -5,22 +5,20 @@
 # Copyright (c) 2021-2022 gatecat <gatecat@ds0.me>
 # SPDX-License-Identifier: BSD-2-Clause
 
-from amaranth import *
+from amaranth import Module, ClockSignal, ResetSignal, Signal, unsigned, ClockDomain, Cat
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 from amaranth.utils import ceil_log2
-
-from amaranth.sim import Simulator
 
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 
 from chipflow_lib.platforms import BidirPinSignature, OutputPinSignature
 
-__all__ = ["HyperRAMPins", "HyperRAM"]
+__all__ = ["HyperRAM"]
 
 
-class HyperRAMPins(wiring.PureInterface):
+class HyperRAM(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self, *, cs_count=1):
             super().__init__({
@@ -31,15 +29,6 @@ class HyperRAMPins(wiring.PureInterface):
                 "dq": Out(BidirPinSignature(8)),
             })
 
-        def create(self, *, path=(), src_loc_at=0):
-            return HyperRAMPins(cs_count=self.cs_count, src_loc_at=1 + src_loc_at)
-
-    def __init__(self, *, cs_count=1, path=(), src_loc_at=0):
-        super().__init__(self.Signature(cs_count=cs_count), path=path, src_loc_at=1 + src_loc_at)
-        self.cs_count = cs_count
-
-
-class HyperRAM(wiring.Component):
     class CtrlConfig(csr.Register, access="rw"):
         def __init__(self, init_latency):
             super().__init__({
@@ -57,9 +46,8 @@ class HyperRAM(wiring.Component):
 
     This core favors portability and ease of use over performance.
     """
-    def __init__(self, mem_name=("mem",), *, pins, init_latency=7):
-        self.pins = pins
-        self.cs_count = pins.cs_count
+    def __init__(self, mem_name=("mem",), *, cs_count=1, init_latency=7):
+        self.cs_count = cs_count
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?
@@ -79,6 +67,7 @@ class HyperRAM(wiring.Component):
             "ctrl_bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
             "data_bus": In(wishbone.Signature(addr_width=ceil_log2(self.size >> 2), data_width=32,
                            granularity=8)),
+            "pins": Out(self.Signature()),
         })
         self.ctrl_bus.memory_map = ctrl_memory_map
         self.data_bus.memory_map = data_memory_map
@@ -142,32 +131,32 @@ class HyperRAM(wiring.Component):
                         self.pins.dq.oe.eq(1),
                         counter.eq(6),
                         # Assign CA
-                        sr[47].eq(~self.data_bus.we), # R/W#
-                        sr[46].eq(0), # memory space
-                        sr[45].eq(1), # linear burst
-                        sr[16:45].eq(self.data_bus.adr[2:21]), # upper address
-                        sr[4:16].eq(0), # RFU
-                        sr[1:3].eq(self.data_bus.adr[0:2]), # lower address
-                        sr[0].eq(0), # address LSB (0 for 32-bit xfers)
+                        sr[47].eq(~self.data_bus.we),           # R/W#
+                        sr[46].eq(0),                           # memory space
+                        sr[45].eq(1),                           # linear burst
+                        sr[16:45].eq(self.data_bus.adr[2:21]),  # upper address
+                        sr[4:16].eq(0),                         # RFU
+                        sr[1:3].eq(self.data_bus.adr[0:2]),     # lower address
+                        sr[0].eq(0),                            # address LSB (0 for 32-bit xfers)
                         latched_adr.eq(self.data_bus.adr),
                         latched_we.eq(self.data_bus.we),
                         is_ctrl_write.eq(0),
                     ]
                     m.next = "WAIT_CA"
-                with m.If(self._hram_cfg.f.val.w_stb): # config register write
+                with m.If(self._hram_cfg.f.val.w_stb):  # config register write
                     m.d.sync += [
                         csn.eq(~(1 << (self._hram_cfg.f.val.w_data[16:16+ceil_log2(self.cs_count)]))),
                         self.pins.dq.oe.eq(1),
                         counter.eq(6),
                         # Assign CA
-                        sr[47].eq(0), # R/W#
-                        sr[46].eq(1), # memory space
-                        sr[45].eq(1), # linear burst
-                        sr[24:45].eq(1), # upper address
-                        sr[16:24].eq(0), # 
-                        sr[4:16].eq(0), # RFU
-                        sr[1:3].eq(0), # lower address
-                        sr[0].eq(0), # address LSB (0 for 32-bit xfers)
+                        sr[47].eq(0),      # R/W#
+                        sr[46].eq(1),      # memory space
+                        sr[45].eq(1),      # linear burst
+                        sr[24:45].eq(1),   # upper address
+                        sr[16:24].eq(0),   #
+                        sr[4:16].eq(0),    # RFU
+                        sr[1:3].eq(0),     # lower address
+                        sr[0].eq(0),       # address LSB (0 for 32-bit xfers)
                         latched_cfg.eq(self._hram_cfg.f.val.w_data[0:16]),
                         is_ctrl_write.eq(1),
                     ]
@@ -260,51 +249,3 @@ class HyperRAM(wiring.Component):
                 ]
                 m.next = "IDLE"
         return m
-
-def sim():
-    pins = HyperRAMPins(cs_count=1)
-    m = Module()
-    m.submodules.hram = hram = HyperRAM(pins=pins)
-    sim = Simulator(m)
-    sim.add_clock(1e-6)
-    def process():
-        yield hram.data_bus.adr.eq(0x5A5A5A)
-        yield hram.data_bus.dat_w.eq(0xF0F0F0F0)
-        yield hram.data_bus.sel.eq(1)
-        yield hram.data_bus.we.eq(1)
-        yield hram.data_bus.stb.eq(1)
-        yield hram.data_bus.cyc.eq(1)
-        for i in range(100):
-            if (yield hram.data_bus.ack):
-                yield hram.data_bus.stb.eq(0)
-                yield hram.data_bus.cyc.eq(0)
-            yield
-        yield hram.data_bus.adr.eq(0x5A5A5A)
-        yield hram.data_bus.sel.eq(1)
-        yield hram.data_bus.we.eq(0)
-        yield hram.data_bus.stb.eq(1)
-        yield hram.data_bus.cyc.eq(1)
-        yield pins.rwds.i.eq(1)
-        yield pins.dq.i.eq(0xFF)
-        for i in range(100):
-            if (yield hram.data_bus.ack):
-                yield hram.data_bus.stb.eq(0)
-                yield hram.data_bus.cyc.eq(0)
-            yield
-        yield hram.ctrl_bus.adr.eq(1)
-        yield hram.ctrl_bus.dat_w.eq(0x55AA)
-        yield hram.ctrl_bus.sel.eq(0xF)
-        yield hram.ctrl_bus.we.eq(1)
-        yield hram.ctrl_bus.stb.eq(1)
-        yield hram.ctrl_bus.cyc.eq(1)
-        for i in range(100):
-            if (yield hram.ctrl_bus.ack):
-                yield hram.ctrl_bus.stb.eq(0)
-                yield hram.ctrl_bus.cyc.eq(0)
-            yield
-    sim.add_sync_process(process)
-    with sim.write_vcd("hyperram.vcd", "hyperram.gtkw"):
-        sim.run()
-
-if __name__ == '__main__':
-    sim()
