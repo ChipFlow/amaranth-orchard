@@ -33,7 +33,7 @@ class GPIOPeripheral(wiring.Component):
     addr_width : :class:`int`
         CSR bus address width. Defaults to ``4``.
     data_width : :class:`int`
-        CSR bus data width. Defaults to ``4``.
+        CSR bus data width. Defaults to ``8``.
     input_stages : :class:`int`
         Number of synchronization stages between pin inputs and the :class:`~Peripheral.Input`
         register. Optional. Defaults to ``2``.
@@ -55,7 +55,7 @@ class GPIOPeripheral(wiring.Component):
         If ``input_stages`` is not a non-negative integer.
     """
 
-    def __init__(self, *, pin_count, addr_width=4, data_width=4, input_stages=2):
+    def __init__(self, *, pin_count, addr_width=4, data_width=8, input_stages=2):
         self._gpio = gpio.Peripheral(pin_count=pin_count,
                                      addr_width=addr_width,
                                      data_width=data_width,
