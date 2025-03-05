@@ -9,7 +9,7 @@ from chipflow_lib.platforms import BidirPinSignature
 __all__ = ["GPIOPins", "GPIOPeripheral"]
 
 
-class GPIOPins(wiring.PureInterface):
+class GPIOPeripheral(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self, width):
             if width > 32:
@@ -23,40 +23,30 @@ class GPIOPins(wiring.PureInterface):
         def width(self):
             return self._width
 
-        def create(self, *, path=(), src_loc_at=0):
-            return GPIOPins(width=self.width, path=path, src_loc_at=1 + src_loc_at)
-
-    def __init__(self, width, *, path=(), src_loc_at=0):
-        super().__init__(self.Signature(width), path=path, src_loc_at=1 + src_loc_at)
-
-    @property
-    def width(self):
-        return self.signature.width
-
-
-class GPIOPeripheral(wiring.Component):
     class DO(csr.Register, access="rw"):
         """output data (R/W, ignored for pins configured as inputs)"""
+
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.RW, unsigned(width))})
 
     class OE(csr.Register, access="rw"):
         """output enable (R/W) 1=output, 0=input"""
+
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.RW, unsigned(width))})
 
     class DI(csr.Register, access="r"):
         """input data (R)"""
+
         def __init__(self, width):
             super().__init__({"pins": csr.Field(csr.action.R, unsigned(width))})
 
-    def __init__(self, *, pins: GPIOPins):
+    def __init__(self, *, width: int):
         """Simple GPIO peripheral.
 
         All pins default to input at power up.
         """
-        self.width = pins.width
-        self.pins = pins
+        self.width = width
 
         regs = csr.Builder(addr_width=4, data_width=8)
 
@@ -68,6 +58,7 @@ class GPIOPeripheral(wiring.Component):
 
         super().__init__({
             "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+            "pins": Out(self.Signature(width))
         })
         self.bus.memory_map = self._bridge.bus.memory_map
 
