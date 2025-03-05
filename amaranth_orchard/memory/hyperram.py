@@ -7,7 +7,7 @@
 
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.wiring import Out, connect, flipped
+from amaranth.lib.wiring import In, Out, connect, flipped
 from amaranth.utils import ceil_log2
 
 from amaranth.sim import Simulator
@@ -23,13 +23,12 @@ __all__ = ["HyperRAMPins", "HyperRAM"]
 class HyperRAMPins(wiring.PureInterface):
     class Signature(wiring.Signature):
         def __init__(self, *, cs_count=1):
-            self.cs_count = cs_count
             super().__init__({
-                "clk":   Out(OutputPinSignature(1)),
-                "csn":   Out(OutputPinSignature(cs_count)),
-                "rstn":  Out(OutputPinSignature(1)),
+                "clk": Out(OutputPinSignature(1)),
+                "csn": Out(OutputPinSignature(cs_count)),
+                "rstn": Out(OutputPinSignature(1)),
                 "rwds": Out(BidirPinSignature(1)),
-                "dq":    Out(BidirPinSignature(1)),
+                "dq": Out(BidirPinSignature(8)),
             })
 
         def create(self, *, path=(), src_loc_at=0):
@@ -37,6 +36,7 @@ class HyperRAMPins(wiring.PureInterface):
 
     def __init__(self, *, cs_count=1, path=(), src_loc_at=0):
         super().__init__(self.Signature(cs_count=cs_count), path=path, src_loc_at=1 + src_loc_at)
+        self.cs_count = cs_count
 
 
 class HyperRAM(wiring.Component):
@@ -59,14 +59,14 @@ class HyperRAM(wiring.Component):
     """
     def __init__(self, mem_name=("mem",), *, pins, init_latency=7):
         self.pins = pins
-        self.cs_count = len(self.pins.csn_o)
+        self.cs_count = pins.cs_count
         self.size = 2**23 * self.cs_count # 8MB per CS pin
         self.init_latency = init_latency
         assert self.init_latency in (6, 7) # TODO: anything else possible ?
 
         regs = csr.Builder(addr_width=3, data_width=8)
 
-        self._ctrl_cfg = regs.add("ctrl_cfg", self.CtrlConfig(), offset=0x0)
+        self._ctrl_cfg = regs.add("ctrl_cfg", self.CtrlConfig(init_latency), offset=0x0)
         self._hram_cfg = regs.add("hram_cfg", self.HRAMConfig(), offset=0x4)
 
         self._bridge = csr.Bridge(regs.as_memory_map())
@@ -76,9 +76,9 @@ class HyperRAM(wiring.Component):
         data_memory_map.add_resource(name=mem_name, size=self.size, resource=self)
 
         super().__init__({
-            "ctrl_bus": csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width),
-            "data_bus": wishbone.Signature(addr_width=ceil_log2(self.size / 4), data_width=32,
-                                           granularity=8),
+            "ctrl_bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+            "data_bus": In(wishbone.Signature(addr_width=ceil_log2(self.size >> 2), data_width=32,
+                           granularity=8)),
         })
         self.ctrl_bus.memory_map = ctrl_memory_map
         self.data_bus.memory_map = data_memory_map
@@ -87,7 +87,7 @@ class HyperRAM(wiring.Component):
         m = Module()
         m.submodules.bridge = self._bridge
 
-        connect(m, flipped(self.bus), self._bridge.bus)
+        connect(m, flipped(self.ctrl_bus), self._bridge.bus)
 
         is_ctrl_write = Signal()
         latched_adr = Signal(len(self.data_bus.adr))
@@ -119,13 +119,13 @@ class HyperRAM(wiring.Component):
             m.d.sync += counter.eq(counter-1)
         with m.If(counter.any()):
             # move shift register (sample/output data) on posedge
-            m.d.sync += sr.eq(Cat(self.pins.dq_i, sr[:-8]))
+            m.d.sync += sr.eq(Cat(self.pins.dq.i, sr[:-8]))
 
         m.d.comb += [
-            self.pins.clk_o.eq(clk),
-            self.pins.csn_o.eq(csn),
-            self.pins.rstn_o.eq(~ResetSignal()),
-            self.pins.dq_o.eq(sr[-8:]),
+            self.pins.clk.o.eq(clk),
+            self.pins.csn.o.eq(csn),
+            self.pins.rstn.o.eq(~ResetSignal()),
+            self.pins.dq.o.eq(sr[-8:]),
             self.data_bus.dat_r.eq(sr[:32]),
         ]
 
@@ -133,13 +133,13 @@ class HyperRAM(wiring.Component):
             with m.State("IDLE"):
                 m.d.sync += [
                     counter.eq(0),
-                    self.pins.rwds_oe.eq(0),
+                    self.pins.rwds.oe.eq(0),
                     csn.eq((1 << self.cs_count) - 1), # all disabled
                 ]
                 with m.If(self.data_bus.stb & self.data_bus.cyc): # data bus activity
                     m.d.sync += [
                         csn.eq(~(1 << (self.data_bus.adr[21:]))),
-                        self.pins.dq_oe.eq(1),
+                        self.pins.dq.oe.eq(1),
                         counter.eq(6),
                         # Assign CA
                         sr[47].eq(~self.data_bus.we), # R/W#
@@ -157,7 +157,7 @@ class HyperRAM(wiring.Component):
                 with m.If(self._hram_cfg.f.val.w_stb): # config register write
                     m.d.sync += [
                         csn.eq(~(1 << (self._hram_cfg.f.val.w_data[16:16+ceil_log2(self.cs_count)]))),
-                        self.pins.dq_oe.eq(1),
+                        self.pins.dq.oe.eq(1),
                         counter.eq(6),
                         # Assign CA
                         sr[47].eq(0), # R/W#
@@ -177,7 +177,7 @@ class HyperRAM(wiring.Component):
                 with m.If(counter == 3):
                     # RWDS tells us if we need 2x latency or not
                     #   sample at an arbitrary midpoint in CA
-                    m.d.sync += x2_lat.eq(self.pins.rwds_i)
+                    m.d.sync += x2_lat.eq(self.pins.rwds.i)
                 with m.If(counter == 1):
                     # (almost) done shifting CA
                     with m.If(is_ctrl_write):
@@ -195,31 +195,31 @@ class HyperRAM(wiring.Component):
                             m.d.sync += counter.eq(2*self._ctrl_cfg.f.latency.data - 2)
                         m.next = "WAIT_LAT"
             with m.State("WAIT_LAT"):
-                m.d.sync += self.pins.dq_oe.eq(0)
+                m.d.sync += self.pins.dq.oe.eq(0)
                 with m.If(counter == 1):
                     # About to shift data
                     m.d.sync += [
                         sr[:16].eq(0),
                         sr[16:].eq(self.data_bus.dat_w),
-                        self.pins.dq_oe.eq(self.data_bus.we),
-                        self.pins.rwds_oe.eq(self.data_bus.we),
-                        self.pins.rwds_o.eq(~self.data_bus.sel[3]),
+                        self.pins.dq.oe.eq(self.data_bus.we),
+                        self.pins.rwds.oe.eq(self.data_bus.we),
+                        self.pins.rwds.o.eq(~self.data_bus.sel[3]),
                         counter.eq(4),
                     ]
                     m.next = "SHIFT_DAT"
             with m.State("SHIFT_DAT"):
                 with m.If(counter == 4):
-                    m.d.sync += self.pins.rwds_o.eq(~self.data_bus.sel[2])
+                    m.d.sync += self.pins.rwds.o.eq(~self.data_bus.sel[2])
                 with m.If(counter == 3):
-                    m.d.sync += self.pins.rwds_o.eq(~self.data_bus.sel[1])
+                    m.d.sync += self.pins.rwds.o.eq(~self.data_bus.sel[1])
                 with m.If(counter == 2):
-                    m.d.sync += self.pins.rwds_o.eq(~self.data_bus.sel[0])
+                    m.d.sync += self.pins.rwds.o.eq(~self.data_bus.sel[0])
                 with m.If(counter == 1):
                     m.next = "ACK_XFER"
             with m.State("ACK_XFER"):
                 m.d.sync += [
-                    self.pins.rwds_oe.eq(0),
-                    self.pins.dq_oe.eq(0),
+                    self.pins.rwds.oe.eq(0),
+                    self.pins.dq.oe.eq(0),
                     self.data_bus.ack.eq(1),
                     wait_count.eq(9)
                 ]
@@ -235,9 +235,9 @@ class HyperRAM(wiring.Component):
                         m.d.sync += [
                             sr[:16].eq(0),
                             sr[16:].eq(self.data_bus.dat_w),
-                            self.pins.dq_oe.eq(self.data_bus.we),
-                            self.pins.rwds_oe.eq(self.data_bus.we),
-                            self.pins.rwds_o.eq(~self.data_bus.sel[3]),
+                            self.pins.dq.oe.eq(self.data_bus.we),
+                            self.pins.rwds.oe.eq(self.data_bus.we),
+                            self.pins.rwds.o.eq(~self.data_bus.sel[3]),
                             latched_adr.eq(self.data_bus.adr),
                             counter.eq(4),
                         ]
@@ -254,8 +254,8 @@ class HyperRAM(wiring.Component):
                     m.next = "CTRL_DONE"
             with m.State("CTRL_DONE"):
                 m.d.sync += [
-                    self.pins.rwds_oe.eq(0),
-                    self.pins.dq_oe.eq(0),
+                    self.pins.rwds.oe.eq(0),
+                    self.pins.dq.oe.eq(0),
                     csn.eq((1 << self.cs_count) - 1),
                 ]
                 m.next = "IDLE"
@@ -284,8 +284,8 @@ def sim():
         yield hram.data_bus.we.eq(0)
         yield hram.data_bus.stb.eq(1)
         yield hram.data_bus.cyc.eq(1)
-        yield pins.rwds_i.eq(1)
-        yield pins.dq_i.eq(0xFF)
+        yield pins.rwds.i.eq(1)
+        yield pins.dq.i.eq(0xFF)
         for i in range(100):
             if (yield hram.data_bus.ack):
                 yield hram.data_bus.stb.eq(0)
