@@ -56,8 +56,7 @@ class SPIMemIO(wiring.Component):
     - data_bus is a bus peripheral that directly maps the 16MB of read-only flash memory.
     """
 
-    def __init__(self, mem_name=("mem",), cfg_name=("cfg",), *, flash):
-        self.flash = flash
+    def __init__(self, mem_name=("mem",), cfg_name=("cfg",), *):
         self.size  = 2**24
         size_words = (self.size * 8) // 32
 
