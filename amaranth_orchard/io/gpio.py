@@ -74,9 +74,12 @@ class GPIOPeripheral(wiring.Component):
 
         connect(m, flipped(self.bus), self._gpio.bus)
         for i in range(self._gpio.pin_count):
-            m.d.comb += self.pins.gpio.i[i].eq(self._gpio.pins[i].i)
-            m.d.comb += self._gpio.pins[i].o.eq(self.pins.gpio.o[i])
-            m.d.comb += self._gpio.pins[i].oe.eq(self.pins.gpio.oe[i])
+            # m.d.comb += self.pins.gpio.i[i].eq(self._gpio.pins[i].i)
+            # m.d.comb += self._gpio.pins[i].o.eq(self.pins.gpio.o[i])
+            # m.d.comb += self._gpio.pins[i].oe.eq(self.pins.gpio.oe[i])
+            m.d.comb += self._gpio.pins[i].i.eq(self.pins.gpio.i[i])
+            m.d.comb += self.pins.gpio.o[i].eq(self._gpio.pins[i].o)
+            m.d.comb += self.pins.gpio.oe[i].eq(self._gpio.pins[i].oe)
 
         return m
 
