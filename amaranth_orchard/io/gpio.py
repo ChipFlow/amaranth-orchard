@@ -70,7 +70,7 @@ class GPIOPeripheral(wiring.Component):
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules._gpio = gpio = self._gpio
+        m.submodules.gpio = gpio = self._gpio
 
         connect(m, flipped(self.bus), self._gpio.bus)
         for i in range(self._gpio.pin_count):
