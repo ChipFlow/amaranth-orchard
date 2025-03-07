@@ -13,9 +13,12 @@ authors = [
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE.txt"}
 
-requires-python = "~=3.8"
+requires-python = ">=3.10"
 dependencies = [
-    "amaranth>=0.5,<0.7",
+    "amaranth>=0.5,<0.6",
+    "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git",
+    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
+    "amaranth-stdio @ git+https://github.com/amaranth-lang/amaranth-stdio",
 ]
 
 # Build system configuration
@@ -25,3 +28,13 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 # Development workflow configuration
+
+[tool.pyright]
+diagnosticMode=false
+typeCheckingMode = "off"
+reportInvalidTypeForm = false
+reportMissingImports = false
+reportUnboundVariable = false
+
+[tool.ruff.lint]
+ignore = ['F403', 'F405']

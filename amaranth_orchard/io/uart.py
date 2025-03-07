@@ -1,30 +1,27 @@
-from amaranth import *
+from amaranth import Module, Signal, unsigned
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr
 from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
 
+from chipflow_lib.platforms import OutputPinSignature, InputPinSignature
 
-__all__ = ["UARTPins", "UARTPeripheral"]
+
+__all__ = ["UARTPeripheral"]
 
 
-class UARTPins(wiring.PureInterface):
+class UARTPeripheral(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "tx_o": Out(1),
-                "rx_i": In(1),
+                "tx": Out(OutputPinSignature(1)),
+                "rx": Out(InputPinSignature(1)),
             })
-
-        def create(self, *, path=(), src_loc_at=0):
-            return UARTPins(path=path, src_loc_at=1 + src_loc_at)
 
     def __init__(self, *, path=(), src_loc_at=0):
         super().__init__(self.Signature(), path=path, src_loc_at=1 + src_loc_at)
 
-
-class UARTPeripheral(wiring.Component):
     class TxData(csr.Register, access="w"):
         """valid to write to when tx_rdy is 1, will trigger a transmit"""
         val: csr.Field(csr.action.W, unsigned(8))
@@ -53,22 +50,22 @@ class UARTPeripheral(wiring.Component):
 
     TODO: Interrupts support, perhaps mimic something with upstream Linux kernel support...
     """
-    def __init__(self, *, init_divisor, pins):
+    def __init__(self, *, init_divisor):
         self.init_divisor = init_divisor
-        self.pins = pins
 
         regs = csr.Builder(addr_width=5, data_width=8)
 
-        self._tx_data  = regs.add("tx_data",  self.TxData(),  offset=0x00)
-        self._rx_data  = regs.add("rx_data",  self.RxData(),  offset=0x04)
-        self._tx_rdy   = regs.add("tx_rdy",   self.TxReady(), offset=0x08)
+        self._tx_data = regs.add("tx_data",  self.TxData(),  offset=0x00)
+        self._rx_data = regs.add("rx_data",  self.RxData(),  offset=0x04)
+        self._tx_rdy = regs.add("tx_rdy",   self.TxReady(), offset=0x08)
         self._rx_avail = regs.add("rx_avail", self.RxAvail(), offset=0x0c)
-        self._divisor  = regs.add("divisor",  self.Divisor(init_divisor), offset=0x10)
+        self._divisor = regs.add("divisor",  self.Divisor(init_divisor), offset=0x10)
 
         self._bridge = csr.Bridge(regs.as_memory_map())
 
         super().__init__({
             "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+            "pins": Out(self.Signature()),
         })
         self.bus.memory_map = self._bridge.bus.memory_map
 
@@ -80,7 +77,7 @@ class UARTPeripheral(wiring.Component):
 
         m.submodules.tx = tx = AsyncSerialTX(divisor=self.init_divisor, divisor_bits=24)
         m.d.comb += [
-            self.pins.tx_o.eq(tx.o),
+            self.pins.tx.o.eq(tx.o),
             tx.data.eq(self._tx_data.f.val.w_data),
             tx.ack.eq(self._tx_data.f.val.w_stb),
             self._tx_rdy.f.val.r_data.eq(tx.rdy),
@@ -102,7 +99,7 @@ class UARTPeripheral(wiring.Component):
             ]
 
         m.d.comb += [
-            rx.i.eq(self.pins.rx_i),
+            rx.i.eq(self.pins.rx.i),
             rx.ack.eq(~rx_avail),
             rx.divisor.eq(self._divisor.f.val.data),
             self._rx_data.f.val.r_data.eq(rx_buf),
