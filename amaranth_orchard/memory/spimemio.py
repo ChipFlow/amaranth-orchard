@@ -81,7 +81,7 @@ class SPIMemIO(wiring.Component):
             "i_resetn": ~ResetSignal(),
             "i_valid": self.data_bus.cyc & self.data_bus.stb,
             "o_ready": spi_ready,
-            "i_addr": Cat(Const(0, 2), self.data_bus.adr),  # Hack to force a 1MB offset
+            "i_addr": Cat(Const(0, 2), self.data_bus.adr),
             "o_rdata": self.data_bus.dat_r,
             "o_flash_csb": self.pins.csn.o,
             "o_flash_clk": self.pins.clk.o,
