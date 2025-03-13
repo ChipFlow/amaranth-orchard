@@ -19,6 +19,7 @@ dependencies = [
     "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git",
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "amaranth-stdio @ git+https://github.com/amaranth-lang/amaranth-stdio",
+    "pytest>=7.2.0",
 ]
 
 # Build system configuration

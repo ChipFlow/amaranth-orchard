@@ -34,16 +34,25 @@ class UARTPhyRx(wiring.Component):
         lower = ResetInserter(self.rst)(lower)
         m.submodules.lower = lower
 
+        m.d.sync += self.overflow.eq(0)
+        with m.If(lower.rdy):
+            with m.If(self.symbols.valid):
+                m.d.sync += self.overflow.eq(1)
+            with m.Else():
+                m.d.sync += [
+                    self.symbols.payload.eq(lower.data),
+                    self.symbols.valid.eq(1),
+                ]
+
+        with m.If(self.symbols.ready):
+            m.d.sync += self.symbols.valid.eq(0)     
+
         m.d.comb += [
             lower.i.eq(self._port.i),
 
             lower.divisor.eq(self.config.divisor),
+            lower.ack.eq(1),
 
-            self.symbols.payload.eq(lower.data),
-            self.symbols.valid.eq(lower.rdy),
-            lower.ack.eq(self.symbols.ready),
-
-            self.overflow.eq(lower.err.overflow),
             self.error.eq(lower.err.frame),
         ]
 
