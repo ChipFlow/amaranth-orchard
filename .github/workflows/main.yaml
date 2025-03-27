@@ -20,14 +20,12 @@ jobs:
       - name: Install dependencies
         run: |
           pdm install
-      - name: Run tests
-        run: |
-          pdm run test
       - name: Run lints
         run: |
           pdm run lint
-      - name: Run doc tests
-        run: pdm run test-docs
+      - name: Run tests
+        run: |
+          pdm run test
 
   license:
     runs-on: ubuntu-latest
@@ -47,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: chipflow-lib
+          path: amaranth-orchard
       - name: Check out chipflow-examples
         uses: actions/checkout@v4
         with:
@@ -86,7 +84,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: chipflow-lib
+          path: amaranth-orchard
       - name: Check out chipflow-examples
         uses: actions/checkout@v4
         with:
