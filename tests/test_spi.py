@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from amaranth import *
-from amaranth.sim import Simulator, Tick
+from amaranth.sim import Simulator
 
-from amaranth_orchard.io import SPIPeripheral, SPISignature
+from amaranth_orchard.io import SPIPeripheral
 import unittest
 
 class TestSpiPeripheral(unittest.TestCase):
@@ -112,9 +112,11 @@ class TestSpiPeripheral(unittest.TestCase):
             for i in reversed(range(width)):
                 self.assertEqual(ctx.get(dut.spi_pins.copi.o),(d_send >> i) & 0x1)
                 self.assertEqual(ctx.get(dut.spi_pins.sck.o), 0)
-                for j in range(divide+1): await ctx.tick()
+                for j in range(divide+1):
+                    await ctx.tick()
                 self.assertEqual(ctx.get(dut.spi_pins.sck.o), 1)
-                for j in range(divide+1): await ctx.tick()
+                for j in range(divide+1):
+                    await ctx.tick()
             await ctx.tick()
             await ctx.tick()
             await self._check_reg(ctx, dut, self.REG_STATUS, 1, 1) # full

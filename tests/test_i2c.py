@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from amaranth import *
-from amaranth.sim import Simulator, Tick
+from amaranth.sim import Simulator
 
 from amaranth_orchard.io import I2CPeripheral
 import unittest
@@ -71,7 +71,8 @@ class TestI2CPeripheral(unittest.TestCase):
             await ctx.tick()
             await self._check_reg(ctx, dut.i2c, self.REG_STATUS, 0, 1) # not busy
             await self._write_reg(ctx, dut.i2c, self.REG_ACTION, 1<<2, 1) # STOP
-            for i in range(3): await ctx.tick()
+            for i in range(3):
+                await ctx.tick()
             self.assertEqual(ctx.get(dut.sda), 1)
             self.assertEqual(ctx.get(dut.scl), 1)
             await ctx.tick()
@@ -89,22 +90,28 @@ class TestI2CPeripheral(unittest.TestCase):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
             await ctx.tick()
             await self._write_reg(ctx, dut.i2c, self.REG_ACTION, 1<<1, 1) # START
-            for i in range(10): await ctx.tick() # wait for START to be completed
+            for i in range(10):
+                await ctx.tick() # wait for START to be completed
             for data in (0xAB, 0x63):
                 await self._write_reg(ctx, dut.i2c, self.REG_SEND_DATA, data, 1) # write
-                for i in range(3): await ctx.tick()
+                for i in range(3):
+                    await ctx.tick()
                 for bit in reversed(range(-1, 8)):
                     self.assertEqual(ctx.get(dut.scl), 0)
-                    for i in range(4): await ctx.tick()
+                    for i in range(4):
+                        await ctx.tick()
                     if bit == -1: # ack
                         ctx.set(dut.sda_i, 0)
                     else:
                         self.assertEqual(ctx.get(dut.sda), (data >> bit) & 0x1)
-                    for i in range(2): await ctx.tick()
+                    for i in range(2):
+                        await ctx.tick()
                     self.assertEqual(ctx.get(dut.scl), 1)
-                    for i in range(6): await ctx.tick()
+                    for i in range(6):
+                        await ctx.tick()
                 ctx.set(dut.sda_i, 1) # reset bus
-                for i in range(20): await ctx.tick()
+                for i in range(20):
+                    await ctx.tick()
                 await self._check_reg(ctx, dut.i2c, self.REG_STATUS, 2, 1) # not busy, acked
         sim = Simulator(dut)
         sim.add_clock(1e-5)
@@ -119,23 +126,29 @@ class TestI2CPeripheral(unittest.TestCase):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
             await ctx.tick()
             await self._write_reg(ctx, dut.i2c, self.REG_ACTION, 1<<1, 1) # START
-            for i in range(10): await ctx.tick() # wait for START to be completed
+            for i in range(10):
+                await ctx.tick() # wait for START to be completed
             await self._write_reg(ctx, dut.i2c, self.REG_ACTION, 1<<3, 1) # READ, ACK
-            for i in range(3): await ctx.tick()
+            for i in range(3):
+                await ctx.tick()
             for bit in reversed(range(-1, 8)):
                 self.assertEqual(ctx.get(dut.scl), 0)
-                for i in range(4): await ctx.tick()
+                for i in range(4):
+                    await ctx.tick()
                 if bit == -1: # ack
                     self.assertEqual(ctx.get(dut.sda), 0)
                 else:
                     ctx.set(dut.sda_i, (data >> bit) & 0x1)
-                for i in range(2): await ctx.tick()
+                for i in range(2):
+                    await ctx.tick()
                 self.assertEqual(ctx.get(dut.scl), 1)
-                for i in range(6): await ctx.tick()
+                for i in range(6):
+                    await ctx.tick()
                 if bit == 0:
                     ctx.set(dut.sda_i, 1) # reset bus
 
-            for i in range(20): await ctx.tick()
+            for i in range(20):
+                await ctx.tick()
             await self._check_reg(ctx, dut.i2c, self.REG_STATUS, 0, 1) # not busy
             await self._check_reg(ctx, dut.i2c, self.REG_RECEIVE_DATA, data, 1) # data
         sim = Simulator(dut)

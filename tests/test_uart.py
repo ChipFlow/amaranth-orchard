@@ -28,7 +28,6 @@ class PeripheralTestCase(unittest.TestCase):
         rx_addr = 0x00
         tx_addr = 0x10
         config_addr = 0x00
-        phy_config_addr = 0x04
         status_addr = 0x08
         data_addr = 0x09
 

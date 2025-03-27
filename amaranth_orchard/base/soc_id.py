@@ -2,7 +2,7 @@ import subprocess
 
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.wiring import In, Out, flipped, connect
+from amaranth.lib.wiring import In, flipped, connect
 
 from amaranth_soc import csr
 
