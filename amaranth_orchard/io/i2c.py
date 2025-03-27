@@ -1,7 +1,6 @@
 from amaranth import *
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
-from amaranth.lib.cdc import FFSynchronizer
 
 from amaranth_soc import csr
 from chipflow_lib.platforms import BidirPinSignature

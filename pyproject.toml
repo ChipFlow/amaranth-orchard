@@ -35,7 +35,7 @@ reportMissingImports = false
 reportUnboundVariable = false
 
 [tool.ruff.lint]
-ignore = ['F403', 'F405']
+ignore = ['F403', 'F405', 'F841']
 
 [tool.pdm.version]
 source = "scm"
