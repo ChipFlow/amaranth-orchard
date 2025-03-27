@@ -90,7 +90,7 @@ class SRAMPeripheral(wiring.Component):
         m = Module()
         m.submodules.mem = self._mem
 
-        incr = Signal.like(self.bus.adr)
+        # incr = Signal.like(self.bus.adr)
 
         mem_rp = self._mem.read_port()
         m.d.comb += self.bus.dat_r.eq(mem_rp.data)

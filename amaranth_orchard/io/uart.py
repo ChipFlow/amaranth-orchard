@@ -1,5 +1,5 @@
-from amaranth import Module, Signal, unsigned, ResetInserter
-from amaranth.lib import wiring, data, stream, io
+from amaranth import Module, unsigned, ResetInserter
+from amaranth.lib import wiring, data, stream
 from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr
