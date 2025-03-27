@@ -1,3 +1,7 @@
+# amaranth: UnusedElaboratable=no
+
+# SPDX-License-Identifier: BSD-2-Clause
+
 from amaranth import Module
 from amaranth.sim import Simulator
 from amaranth_orchard.memory import HyperRAM
