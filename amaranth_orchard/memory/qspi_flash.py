@@ -9,7 +9,7 @@ from amaranth_soc.memory import MemoryMap
 from amaranth_orchard.io.glasgow_iostream import PortGroup
 from amaranth_orchard.memory.glasgow_qspi import QSPIMode, QSPIController
 
-from chipflow_lib.platforms import InputPinSignature, BidirPinSignature, OutputPinSignature
+from chipflow_lib.platforms import BidirPinSignature, OutputPinSignature
 
 __all__ = ["QSPIFlash"]
 

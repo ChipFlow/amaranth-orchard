@@ -4,12 +4,11 @@
 
 import unittest
 from amaranth import *
-from amaranth.lib import enum, io, data, wiring, stream
+from amaranth.lib import enum, data, wiring, stream
 from amaranth.lib.wiring import In, Out, connect
-from amaranth.lib.fifo import SyncFIFO
 from amaranth.sim import *
 
-from amaranth_orchard.memory.glasgow_qspi import QSPIMode, QSPIController
+from amaranth_orchard.memory.glasgow_qspi import QSPIMode
 from amaranth_orchard.memory.qspi_flash import WishboneQSPIFlashController
 
 class _QSPIFlashCommand(enum.Enum, shape=8):
