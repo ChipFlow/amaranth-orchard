@@ -1,8 +1,5 @@
 # Project metadata
 
-[tool.pdm.version]
-source = "scm"
-
 [project]
 name = "amaranth-orchard"
 dynamic = ["version"]
@@ -16,7 +13,7 @@ license = {file = "LICENSE.txt"}
 requires-python = ">=3.10"
 dependencies = [
     "amaranth>=0.5,<0.6",
-    "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git",
+    "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git@replace-qspi-v2",
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "amaranth-stdio @ git+https://github.com/amaranth-lang/amaranth-stdio",
     "pytest>=7.2.0",
@@ -38,4 +35,24 @@ reportMissingImports = false
 reportUnboundVariable = false
 
 [tool.ruff.lint]
-ignore = ['F403', 'F405']
+ignore = ['F403', 'F405', 'F841', 'E701']
+
+[tool.pdm.version]
+source = "scm"
+
+[tool.pdm.scripts]
+test.cmd = "pytest"
+test-cov.cmd = "pytest --cov=amaranth-orchard cov-report=term"
+test-cov-html.cmd = "pytest --cov=amaranth-orchard --cov-report=html"
+# test-docs.cmd = "sphinx-build -b doctest docs/ docs/_build"
+lint.cmd = "ruff check"
+# docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
+
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.2",
+    "pytest>=7.2.0",
+    "pytest-cov>=0.6",
+]
