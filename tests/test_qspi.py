@@ -1,3 +1,7 @@
+# amaranth: UnusedElaboratable=no
+
+# SPDX-License-Identifier: BSD-2-Clause
+
 import unittest
 from amaranth import *
 from amaranth.lib import enum, io, data, wiring, stream
