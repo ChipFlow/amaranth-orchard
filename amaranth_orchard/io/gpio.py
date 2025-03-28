@@ -4,7 +4,7 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr, gpio
 
-from chipflow_lib.platforms import BidirPinSignature, PinSignature
+from chipflow_lib.platforms import BidirPinSignature
 
 __all__ = ["GPIOPeripheral"]
 

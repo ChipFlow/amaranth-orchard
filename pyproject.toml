@@ -1,8 +1,5 @@
 # Project metadata
 
-[tool.pdm.version]
-source = "scm"
-
 [project]
 name = "amaranth-orchard"
 dynamic = ["version"]
@@ -38,4 +35,24 @@ reportMissingImports = false
 reportUnboundVariable = false
 
 [tool.ruff.lint]
-ignore = ['F403', 'F405']
+ignore = ['F403', 'F405', 'F841']
+
+[tool.pdm.version]
+source = "scm"
+
+[tool.pdm.scripts]
+test.cmd = "pytest"
+test-cov.cmd = "pytest --cov=amaranth-orchard cov-report=term"
+test-cov-html.cmd = "pytest --cov=amaranth-orchard --cov-report=html"
+# test-docs.cmd = "sphinx-build -b doctest docs/ docs/_build"
+lint.cmd = "ruff check"
+# docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
+test-examples.working_dir = "."
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.2",
+    "pytest>=7.2.0",
+    "pytest-cov>=0.6",
+]
