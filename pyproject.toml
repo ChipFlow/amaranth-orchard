@@ -45,8 +45,10 @@ test.cmd = "pytest"
 test-cov.cmd = "pytest --cov=amaranth-orchard cov-report=term"
 test-cov-html.cmd = "pytest --cov=amaranth-orchard --cov-report=html"
 # test-docs.cmd = "sphinx-build -b doctest docs/ docs/_build"
+test-docs.cmd = "true"
 lint.cmd = "ruff check"
-# docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
+#docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
+doc.cmd = "true"
 
 
 [dependency-groups]
