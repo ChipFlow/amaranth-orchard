@@ -6,7 +6,6 @@
 #   "requirements-parser",
 # ]
 # ///
-# SPDX-License-Identifier: BSD-2-Clause
 import os
 import subprocess
 import sys
@@ -14,6 +13,7 @@ import urllib
 from pathlib import Path
 
 from pyproject_parser import PyProject
+from requirements.requirement import Requirement
 
 
 rootdir = Path(os.environ["PDM_PROJECT_ROOT"])
