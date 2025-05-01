@@ -9,7 +9,7 @@ from amaranth_soc.memory import MemoryMap
 from amaranth_orchard.io.glasgow_iostream import PortGroup
 from amaranth_orchard.memory.glasgow_qspi import QSPIMode, QSPIController
 
-from chipflow_lib.platforms import BidirIOSignature, OutputIOSignature
+from chipflow_lib.platforms import BidirPinSignature, OutputPinSignature
 
 __all__ = ["QSPIFlash"]
 
@@ -252,9 +252,9 @@ class QSPIFlash(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "clk": Out(OutputIOSignature(1)),
-                "csn": Out(OutputIOSignature(1)),
-                "d": Out(BidirIOSignature(4, all_have_oe=True)),
+                "clk": Out(OutputPinSignature(1)),
+                "csn": Out(OutputPinSignature(1)),
+                "d": Out(BidirPinSignature(4, all_have_oe=True)),
             })
 
     def __init__(self, *, addr_width, data_width):

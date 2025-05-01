@@ -3,15 +3,15 @@ from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 
 from amaranth_soc import csr
-from chipflow_lib.platforms import InputIOSignature, OutputIOSignature
+from chipflow_lib.platforms import InputPinSignature, OutputPinSignature
 
 __all__ = ["SPISignature", "SPIPeripheral"]
 
 SPISignature = wiring.Signature({
-    "sck": Out(OutputIOSignature(1)),
-    "copi": Out(OutputIOSignature(1)),
-    "cipo": Out(InputIOSignature(1)),
-    "csn": Out(OutputIOSignature(1)),
+    "sck": Out(OutputPinSignature(1)),
+    "copi": Out(OutputPinSignature(1)),
+    "cipo": Out(InputPinSignature(1)),
+    "csn": Out(OutputPinSignature(1)),
 })
 
 class SPIController(wiring.Component):

@@ -5,7 +5,7 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 from amaranth_soc import csr
 from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
 
-from chipflow_lib.platforms import OutputIOSignature, InputIOSignature
+from chipflow_lib.platforms import OutputPinSignature, InputPinSignature
 
 from . import rfc_uart
 
@@ -123,12 +123,12 @@ class UARTPeripheral(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "tx": Out(OutputIOSignature(1)),
-                "rx": Out(InputIOSignature(1)),
+                "tx": Out(OutputPinSignature(1)),
+                "rx": Out(InputPinSignature(1)),
             })
 
 
-    """Wrapper for amaranth_soc RFC UART with PHY and chipflow_lib.IOSignature support
+    """Wrapper for amaranth_soc RFC UART with PHY and chipflow_lib.PinSignature support
 
     Parameters
     ----------
@@ -143,7 +143,7 @@ class UARTPeripheral(wiring.Component):
     ----------
     bus : :class:`csr.Interface`
         CSR bus interface providing access to registers.
-    pins : :class:`list` of :class:`wiring.PureInterface` of :class:`IOSignature`
+    pins : :class:`list` of :class:`wiring.PureInterface` of :class:`PinSignature`
         UART pin interfaces.
 
     """

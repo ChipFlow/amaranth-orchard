@@ -4,7 +4,7 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr, gpio
 
-from chipflow_lib.platforms import BidirIOSignature
+from chipflow_lib.platforms import BidirPinSignature
 
 __all__ = ["GPIOPeripheral"]
 
@@ -17,14 +17,14 @@ class GPIOPeripheral(wiring.Component):
                 raise ValueError(f"Pin pin_count must be lesser than or equal to 32, not {pin_count}")
             self._pin_count = pin_count
             super().__init__({
-                "gpio": Out(BidirIOSignature(pin_count, all_have_oe=True))
+                "gpio": Out(BidirPinSignature(pin_count, all_have_oe=True))
                 })
 
         @property
         def pin_count(self):
             return self._pin_count
 
-    """Wrapper for amaranth_soc gpio with chipflow_lib.IOSignature support
+    """Wrapper for amaranth_soc gpio with chipflow_lib.PinSignature support
 
     Parameters
     ----------
@@ -42,7 +42,7 @@ class GPIOPeripheral(wiring.Component):
     ----------
     bus : :class:`csr.Interface`
         CSR bus interface providing access to registers.
-    pins : :class:`list` of :class:`wiring.PureInterface` of :class:`IOSignature`
+    pins : :class:`list` of :class:`wiring.PureInterface` of :class:`PinSignature`
         GPIO pin interfaces.
     alt_mode : :class:`Signal`
         Indicates which members of the :attr:`Peripheral.pins` array are in alternate mode.
