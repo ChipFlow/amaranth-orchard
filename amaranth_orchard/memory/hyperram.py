@@ -13,7 +13,7 @@ from amaranth.utils import ceil_log2
 from amaranth_soc import csr, wishbone
 from amaranth_soc.memory import MemoryMap
 
-from chipflow_lib.platforms import BidirPinSignature, OutputPinSignature
+from chipflow_lib.platforms import BidirIOSignature, OutputIOSignature
 
 __all__ = ["HyperRAM"]
 
@@ -22,11 +22,11 @@ class HyperRAM(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self, *, cs_count=1):
             super().__init__({
-                "clk": Out(OutputPinSignature(1)),
-                "csn": Out(OutputPinSignature(cs_count)),
-                "rstn": Out(OutputPinSignature(1)),
-                "rwds": Out(BidirPinSignature(1)),
-                "dq": Out(BidirPinSignature(8)),
+                "clk": Out(OutputIOSignature(1)),
+                "csn": Out(OutputIOSignature(cs_count)),
+                "rstn": Out(OutputIOSignature(1)),
+                "rwds": Out(BidirIOSignature(1)),
+                "dq": Out(BidirIOSignature(8)),
             })
 
     class CtrlConfig(csr.Register, access="rw"):
