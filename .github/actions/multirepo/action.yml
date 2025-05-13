@@ -1,0 +1,57 @@
+name: 'PDM Multirepo branches'
+description: 'For git+https dependencies, check if the current branch name exitsts there and use it if it does'
+inputs:
+  working-directory:
+    description: 'working directory'
+    required: false
+    default: './'
+outputs:
+  overrides-generated:
+    description: "True if overrides were generated and used"
+    value: ${{ steps.gen-overrides.outputs.overrides_generated }}
+runs:
+  using: "composite"
+  steps:
+    - name: Generate overrides to use current branch if PR
+      id: gen-overrides
+      working-directory: ${{ inputs.working-directory }}
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        pdm run tools/gen_overrides.py ${{github.head_ref}} > overrides.txt
+        if [ -s overrides.txt ]; then
+          echo "Generated overrides:"
+          cat overrides.txt
+          echo "overrides_generated=1" >> "$GITHUB_OUTPUT"
+          echo "** Using overrides for $GITHUB_JOB **" > override.msg
+          cat overrides.txt >> override.msg
+        else
+          echo "overrides_generated=2" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Message overrides
+      if: github.event_name == 'pull_request' && ${{ steps.gen-overrides.overrides_generated }}
+      uses: thollander/actions-comment-pull-request@v3
+      with:
+        file-path:  '${{ inputs.working-directory }}/override.msg'
+        comment-tag: ${{github.job}}-override
+        create-if-not-exists: true
+
+    - name: Relock PDM
+      working-directory: ${{ inputs.working-directory }}
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: pdm lock -d
+
+    - name: Relock PDM (PR)
+      working-directory: ${{ inputs.working-directory }}
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: pdm lock -d --override overrides.txt
+
+    - name: Install dependencies
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: pdm install
+
+

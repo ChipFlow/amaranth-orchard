@@ -20,40 +20,9 @@ jobs:
       - name: Set up PDM
         uses: pdm-project/setup-pdm@v4
 
-      - name: Generate overrides to use current branch if PR
-        id: gen-overrides
-        if: github.event_name == 'pull_request'
-        run: |
-          pdm run tools/gen_overrides.py ${{github.head_ref}} > overrides.txt
-          if [ -s overrides.txt ]; then
-            echo "Generated overrides:"
-            cat overrides.txt
-            echo "overrides_generated=1" >> "$GITHUB_OUTPUT"
-            echo "** Using overrides for $GITHUB_JOB **" > override.msg
-            cat overrides.txt >> override.msg
-          else
-            echo "overrides_generated=2" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Install dependencies with multirepo
+        uses: ./.github/actions/multirepo
 
-      - name: Message overrides
-        if: github.event_name == 'pull_request' && ${{ steps.gen-overrides.overrides_generated }}
-        uses: thollander/actions-comment-pull-request@v3
-        with:
-          file-path:  './override.msg'
-          comment-tag: ${{github.job}}-override
-          create-if-not-exists: true
-
-      - name: Relock PDM
-        if: github.event_name != 'pull_request'
-        run: pdm lock -d
-
-      - name: Relock PDM (PR)
-        if: github.event_name == 'pull_request'
-        run: pdm lock -d --override overrides.txt
-
-      - name: Install dependencies
-        run: |
-          pdm install
       - name: Run tests
         run: |
           pdm run test
@@ -88,7 +57,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ChipFlow/chipflow-examples
-          fetch-depth: 0
           path: chipflow-examples
           ref: ${{ github.head_ref || 'refs/heads/main' }}
 
@@ -99,44 +67,11 @@ jobs:
           cache: true
           cache-dependency-path: './**/pyproject.toml'
 
-      - name: Generate overrides to use current branch if PR
-        id: gen-overrides
-        working-directory: ./chipflow-examples
-        if: github.event_name == 'pull_request'
-        run: |
-          pdm run tools/gen_overrides.py ${{github.head_ref}} > overrides.txt
-          if [ -s overrides.txt ]; then
-            echo "Generated overrides:"
-            cat overrides.txt
-            echo "overrides_generated=1" >> "$GITHUB_OUTPUT"
-            echo "** Using overrides for $GITHUB_JOB **" > override.msg
-            cat overrides.txt >> override.msg
-          else
-            echo "overrides_generated=2" >> "$GITHUB_OUTPUT"
-          fi
 
-      - name: Message overrides
-        if: github.event_name == 'pull_request' && ${{ steps.gen-overrides.overrides_generated }}
-        uses: thollander/actions-comment-pull-request@v3
+      - name: Install dependencies with multirepo
+        uses: ./.github/actions/multirepo
         with:
-          file-path:  './chipflow-examples/override.msg'
-          comment-tag: ${{github.job}}-override
-          create-if-not-exists: true
-
-      - name: Relock PDM
-        working-directory: ./chipflow-examples
-        if: github.event_name != 'pull_request'
-        run: pdm lock -d
-
-      - name: Relock PDM (PR)
-        working-directory: ./chipflow-examples
-        if: github.event_name == 'pull_request'
-        run: pdm lock -d --override overrides.txt
-
-      - name: Install dependencies
-        working-directory: ./chipflow-examples
-        run: |
-          pdm install
+          working-directory: './chipflow-examples'
 
       - name: Run tests
         working-directory: ./chipflow-examples
