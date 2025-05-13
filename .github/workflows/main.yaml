@@ -21,11 +21,27 @@ jobs:
         uses: pdm-project/setup-pdm@v4
 
       - name: Generate overrides to use current branch if PR
+        id: gen-overrides
         if: github.event_name == 'pull_request'
         run: |
           pdm run tools/gen_overrides.py ${{github.head_ref}} > overrides.txt
-          echo "Generated overrides:"
-          cat overrides.txt
+          if [ -s overrides.txt ]; then
+            echo "Generated overrides:"
+            cat overrides.txt
+            echo "overrides_generated=1" >> "$GITHUB_OUTPUT"
+            echo "** Using overrides for $GITHUB_JOB **" > override.msg
+            cat overrides.txt >> override.msg
+          else
+            echo "overrides_generated=2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Message overrides
+        if: github.event_name == 'pull_request' && ${{ steps.gen-overrides.overrides_generated }}
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          file-path:  './override.msg'
+          comment-tag: ${{github.job}}-override
+          create-if-not-exists: true
 
       - name: Relock PDM
         if: github.event_name != 'pull_request'
@@ -84,12 +100,28 @@ jobs:
           cache-dependency-path: './**/pyproject.toml'
 
       - name: Generate overrides to use current branch if PR
+        id: gen-overrides
         working-directory: ./chipflow-examples
         if: github.event_name == 'pull_request'
         run: |
           pdm run tools/gen_overrides.py ${{github.head_ref}} > overrides.txt
-          echo "Generated overrides:"
-          cat overrides.txt
+          if [ -s overrides.txt ]; then
+            echo "Generated overrides:"
+            cat overrides.txt
+            echo "overrides_generated=1" >> "$GITHUB_OUTPUT"
+            echo "** Using overrides for $GITHUB_JOB **" > override.msg
+            cat overrides.txt >> override.msg
+          else
+            echo "overrides_generated=2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Message overrides
+        if: github.event_name == 'pull_request' && ${{ steps.gen-overrides.overrides_generated }}
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          file-path:  './chipflow-examples/override.msg'
+          comment-tag: ${{github.job}}-override
+          create-if-not-exists: true
 
       - name: Relock PDM
         working-directory: ./chipflow-examples
