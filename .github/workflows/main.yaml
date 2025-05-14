@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check source code licenses
-        run: ./tools/license_check.sh
+        run: docker run --platform=linux/amd64 -v ${{github.workspace}}:/src ghcr.io/google/addlicense -v -check -l BSD-2-Clause -c "ChipFlow" -s=only -ignore **/__init__.py **/*.py
 
   test-submit:
     runs-on: ubuntu-latest
