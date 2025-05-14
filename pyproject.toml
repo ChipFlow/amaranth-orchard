@@ -16,7 +16,6 @@ dependencies = [
     "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git",
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "amaranth-stdio @ git+https://github.com/amaranth-lang/amaranth-stdio",
-    "pytest>=7.2.0",
 ]
 
 # Build system configuration
@@ -45,9 +44,10 @@ test.cmd = "pytest"
 test-cov.cmd = "pytest --cov=amaranth-orchard cov-report=term"
 test-cov-html.cmd = "pytest --cov=amaranth-orchard --cov-report=html"
 # test-docs.cmd = "sphinx-build -b doctest docs/ docs/_build"
+test-docs.cmd = "true"
 lint.cmd = "ruff check"
-# docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
-test-examples.working_dir = "."
+#docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
+doc.cmd = "true"
 
 
 [dependency-groups]
