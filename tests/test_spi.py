@@ -5,7 +5,7 @@
 from amaranth import *
 from amaranth.sim import Simulator
 
-from amaranth_orchard.io import SPIPeripheral
+from chipflow_digital_ip.io import SPIPeripheral
 import unittest
 
 class TestSpiPeripheral(unittest.TestCase):

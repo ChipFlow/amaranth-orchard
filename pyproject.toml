@@ -1,7 +1,7 @@
 # Project metadata
 
 [project]
-name = "amaranth-orchard"
+name = "chipflow-digital-ip"
 dynamic = ["version"]
 description = "curated collection of Amaranth cores"
 authors = [
@@ -41,8 +41,8 @@ source = "scm"
 
 [tool.pdm.scripts]
 test.cmd = "pytest"
-test-cov.cmd = "pytest --cov=amaranth-orchard cov-report=term"
-test-cov-html.cmd = "pytest --cov=amaranth-orchard --cov-report=html"
+test-cov.cmd = "pytest --cov=chipflow-digital-ip cov-report=term"
+test-cov-html.cmd = "pytest --cov=chipflow-digital-ip --cov-report=html"
 # test-docs.cmd = "sphinx-build -b doctest docs/ docs/_build"
 test-docs.cmd = "true"
 lint.cmd = "ruff check"
