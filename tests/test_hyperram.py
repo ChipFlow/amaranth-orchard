@@ -4,7 +4,7 @@
 
 from amaranth import Module
 from amaranth.sim import Simulator
-from amaranth_orchard.memory import HyperRAM
+from chipflow_digital_ip.memory import HyperRAM
 
 
 def test_hyperram_smoke():

@@ -1,5 +1,5 @@
 """
-The Amaranth SoC RFC UART from https://github.com/ChipFlow/amaranth-orchard
+The Amaranth SoC RFC UART from https://github.com/ChipFlow/chipflow-digital-ip
 """
 
 from amaranth import *

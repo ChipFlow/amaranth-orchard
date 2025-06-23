@@ -6,7 +6,7 @@ import unittest
 from amaranth import *
 from amaranth.sim import *
 
-from amaranth_orchard.io import GPIOPeripheral
+from chipflow_digital_ip.io import GPIOPeripheral
 
 
 class PeripheralTestCase(unittest.TestCase):

@@ -5,7 +5,7 @@
 from amaranth import *
 from amaranth.sim import Simulator
 
-from amaranth_orchard.io import I2CPeripheral
+from chipflow_digital_ip.io import I2CPeripheral
 import unittest
 
 class _I2CHarness(Elaboratable):

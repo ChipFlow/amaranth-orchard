@@ -1,4 +1,4 @@
-# amaranth-orchard
+# chipflow-digital-ip
 
 Curated Amaranth SoC cores
 

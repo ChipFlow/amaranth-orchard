@@ -6,7 +6,7 @@ import unittest
 from amaranth import *
 from amaranth.sim import *
 
-from amaranth_orchard.io import UARTPeripheral
+from chipflow_digital_ip.io import UARTPeripheral
 
 class PeripheralTestCase(unittest.TestCase):
 
