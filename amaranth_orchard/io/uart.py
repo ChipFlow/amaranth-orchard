@@ -123,8 +123,8 @@ class UARTPeripheral(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "tx": Out(OutputIOSignature(1)),
-                "rx": Out(InputIOSignature(1)),
+                "tx": Out(OutputIOSignature(1, interface_power_domain='default')),
+                "rx": Out(InputIOSignature(1, interface_power_domain='default')),
             })
 
 
