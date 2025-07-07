@@ -45,7 +45,7 @@ class UARTPhyRx(wiring.Component):
                 ]
 
         with m.If(self.symbols.ready):
-            m.d.sync += self.symbols.valid.eq(0)     
+            m.d.sync += self.symbols.valid.eq(0)
 
         m.d.comb += [
             lower.i.eq(self._port.i),
@@ -123,8 +123,8 @@ class UARTPeripheral(wiring.Component):
     class Signature(wiring.Signature):
         def __init__(self):
             super().__init__({
-                "tx": Out(OutputIOSignature(1)),
-                "rx": Out(InputIOSignature(1)),
+                "tx": Out(OutputIOSignature(1, interface_power_domains=['default'])),
+                "rx": Out(InputIOSignature(1, interface_power_domains=['default'])),
             })
 
 
