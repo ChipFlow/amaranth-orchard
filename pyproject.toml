@@ -48,6 +48,7 @@ test-docs.cmd = "true"
 lint.cmd = "ruff check"
 #docs.cmd = "sphinx-build docs/ docs/_build/ -W --keep-going"
 doc.cmd = "true"
+export-ips.cmd = "./tools/export_ips.py"
 
 
 [dependency-groups]
