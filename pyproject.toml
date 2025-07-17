@@ -8,11 +8,9 @@ authors = [
     {name = "Myrtle Shah", email = "gatecat@ds0.me" },
 ]
 readme = {file = "README.md", content-type = "text/markdown"}
-license = "BSD-2-Clause AND 0BSD AND Apache-2.0 AND SHL-0.51"
 license-files = [
     "LICENSE*",
     "vendor/*/*/LICEN?E*",
-    "vendor/*/*/COPYRIGHT*",
 ]
 
 requires-python = ">=3.11"
