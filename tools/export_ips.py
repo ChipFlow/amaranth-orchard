@@ -5,7 +5,7 @@ import sys
 from amaranth import Elaboratable
 from amaranth.lib import wiring
 
-import amaranth_orchard
+import chipflow_digital_ip
 
 def children(mod):
     stack = [(attr, getattr(mod, attr)) for attr in dir(mod) if not attr.startswith("_")]
@@ -21,7 +21,7 @@ def children(mod):
             done.append(e)
             stack.extend([(attr, getattr(o, attr)) for attr in dir(o) if not attr.startswith("_")])
 
-gen = children(amaranth_orchard)
+gen = children(chipflow_digital_ip)
 output={}
 for cls in gen:
     output[f"{cls.__module__}.{cls.__qualname__}"]=cls.__doc__
