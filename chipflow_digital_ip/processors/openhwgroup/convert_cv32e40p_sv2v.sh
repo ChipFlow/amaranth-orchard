@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -ex
 
-DESIGN_RTL_DIR=3rdparty/cv32e40p/rtl
+DESIGN_RTL_DIR=${DESIGN_RTL_DIR:=../../../vendor/openhwgroup/cv32e40p/rtl}
 
 sv2v -D SYNTHESIS -D PULP_FPGA_EMUL \
 	--top cv32e40p_top \
-	-w amaranth_cv32e40p/verilog/cv32e40p_conv_sv2v.v \
+	-w verilog/cv32e40p_conv_sv2v.v \
 	-I ${DESIGN_RTL_DIR}/include \
 	-I ${DESIGN_RTL_DIR}/../bhv \
 	-I ${DESIGN_RTL_DIR}/../bhv/include \
