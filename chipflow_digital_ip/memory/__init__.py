@@ -1,3 +1,3 @@
-from .hyperram import *  # noqa
-from .sram import *      # noqa
-from .qspi_flash import * # noqa
+from .hyperram import HyperRAM
+from .sram import SRAMPeripheral
+from .qspi_flash import QSPIFlash

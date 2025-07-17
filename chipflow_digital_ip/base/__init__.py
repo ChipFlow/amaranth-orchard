@@ -1,2 +1,4 @@
-from .platform_timer import *
-from .soc_id import *
+from .platform_timer import PlatformTimer
+from .soc_id import SoCID
+
+__all__ = ['PlatformTimer', 'SoCID']
