@@ -1,8 +1,8 @@
+# SPDX-License-Identifier: BSD-2-Clause
 import inspect
 import json
 import sys
 
-from amaranth import Elaboratable
 from amaranth.lib import wiring
 
 import chipflow_digital_ip
