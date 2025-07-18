@@ -5,9 +5,6 @@ from amaranth.lib.wiring import In, Out, connect, flipped
 from ..io._glasgow_iostream import IOStreamer, IOClocker, PortGroup
 
 
-__all__ = ["QSPIMode", "QSPIEnframer", "QSPIDeframer", "QSPIController"]
-
-
 class QSPIMode(enum.Enum, shape=3):
     Dummy = 0
     PutX1 = 1

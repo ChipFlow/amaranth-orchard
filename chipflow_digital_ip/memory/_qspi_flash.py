@@ -12,9 +12,6 @@ from ..memory._glasgow_qspi import QSPIMode, QSPIController
 from chipflow_lib.platforms import BidirIOSignature, OutputIOSignature
 
 
-__all__ = ["QSPIFlash", "QSPIMode"]
-
-
 class QSPIFlashCommand(enum.Enum, shape=8):
     Read                = 0x03
     FastRead            = 0x0B
