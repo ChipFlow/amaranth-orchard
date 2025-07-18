@@ -17,7 +17,7 @@ requires-python = ">=3.11"
 dependencies = [
     "amaranth>=0.5,<0.6",
     "chipflow-lib @ git+https://github.com/ChipFlow/chipflow-lib.git",
-    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
+    "amaranth-soc @ git+https://github.com/ChipFlow/amaranth-soc.git",
     "amaranth-stdio @ git+https://github.com/amaranth-lang/amaranth-stdio",
     "minerva @ git+https://github.com/minerva-cpu/minerva",
 ]
