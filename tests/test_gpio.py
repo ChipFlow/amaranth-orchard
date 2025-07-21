@@ -5,9 +5,11 @@
 import unittest
 from amaranth import *
 from amaranth.sim import *
-
+from chipflow_digital_ip.base.coverage import ToggleCoverageObserver
+from chipflow_digital_ip.base.base import Observer, BaseEngine
+# from chipflow_digital_ip.base.vcd_writer import _VCDWriter
 from chipflow_digital_ip.io import GPIOPeripheral
-
+from amaranth.sim import Tick, Simulator
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):
@@ -159,10 +161,21 @@ class PeripheralTestCase(unittest.TestCase):
             self.assertEqual(ctx.get(dut.pins.gpio.o), 0b1010)
 
         sim = Simulator(dut)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-6)
         sim.add_testbench(testbench)
-        with sim.write_vcd(vcd_file="test.vcd"):
+        with sim.write_vcd(vcd_file="test.vcd", gtkw_file="test.gtkw", traces=[
+            dut.bus.addr, dut.bus.r_stb, dut.bus.w_stb, dut.bus.w_data, dut.bus.r_data,
+            dut.pins.gpio.i, dut.pins.gpio.o, dut.pins.gpio.oe, dut.alt_mode
+        ]):
             sim.run()
+
+        results = toggle_cov.get_results()
+        print("=== Toggle Coverage Report ===")
+        for signal, toggles in results.items():
+            print(f"{signal}: 0→1={toggles['0->1']}, 1→0={toggles['1->0']}")
+            assert toggles["0->1"] > 0 or toggles["1->0"] > 0, f"No toggles detected on {signal}"
 
     def test_sim_without_input_sync(self):
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8, input_stages=0)
@@ -182,3 +195,6 @@ class PeripheralTestCase(unittest.TestCase):
         sim.add_testbench(testbench)
         with sim.write_vcd(vcd_file="test.vcd"):
             sim.run()
+
+if __name__ == "__main__":
+    unittest.main()
