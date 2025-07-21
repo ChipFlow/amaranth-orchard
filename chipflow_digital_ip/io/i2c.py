@@ -15,17 +15,47 @@ I2CSignature = wiring.Signature({
 
 
 class I2CPeripheral(wiring.Component):
+    """
+    A minimal I2C controller wrapping the Glasgow core
+
+    Support for customisable clock frequency and byte-wise transfers.
+    """
+
     class Divider(csr.Register, access="rw"):
-        """I2C SCK clock divider, 1 = divide by 4"""
+        """Divider register.
+
+        This :class:`Register` is used to configure the clock frequency of the I2C peripheral.
+
+        The SCK frequency is the input clock frequency divided by 4 times the value in this register.
+        For example, for a SCK of 1/12 the system clock, this register would be set to 3.
+        """
         val: csr.Field(csr.action.RW, unsigned(12))
 
     class Action(csr.Register, access="w"):
-        """
-        reset: reset the core, e.g. in case of a bus lockup
-        start: write 1 to trigger I2C start
-        stop: write 1 to trigger I2C stop
-        read_ack: write 1 to trigger I2C read and ACK
-        read_nack: write 1 to trigger I2C read and NACK
+        """Action register.
+
+        This :class:`Register` is written to in order to perform various actions on the I2C bus.
+        Writing ``0b1`` to a field performs that action, it is only valid to set one field at a time.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "reset", "bits": 1, "attr": "W" },
+                    { "name": "start", "bits": 1, "attr": "W" },
+                    { "name": "stop", "bits": 1, "attr": "W" },
+                    { "name": "read_ack", "bits": 1, "attr": "W" },
+                    { "name": "read_nack", "bits": 1, "attr": "W" },
+                    { "bits": 3, "attr": "ResR0W0" },
+                ]
+
+        - The ``reset`` field is used to reset the PHY in case of a lock-up (e.g. SCK stuck low)
+        - The ``start`` field sends an I2C start
+        - The ``stop`` field sends an I2C stop
+        - The ``read_ack`` field begins an I2C read, followed by an ACK
+        - The ``read_nack`` field begins an I2C read, followed by a NACK
         """
         reset: csr.Field(csr.action.W, unsigned(1))
         start: csr.Field(csr.action.W, unsigned(1))
@@ -35,20 +65,61 @@ class I2CPeripheral(wiring.Component):
 
 
     class SendData(csr.Register, access="w"):
-        """writes the given data onto the I2C bus when written to"""
+        """SendData register.
+
+        Writing to this :class:`Register` sends a byte on the I2C bus. 
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "val", "bits": 8, "attr": "W" },
+                ]
+
+        """
         val: csr.Field(csr.action.W, unsigned(8))
 
     class ReceiveData(csr.Register, access="r"):
-        """data received from the last read"""
+        """ReceiveData register.
+
+        This :class:`Register` contains the result of the last read started using `read_ack` or `read_nack`.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "val", "bits": 8, "attr": "R" },
+                ]
+
+        """
         val: csr.Field(csr.action.R, unsigned(8))
 
     class Status(csr.Register, access="r"):
+        """Status register.
+
+        This :class:`Register` contains the status of the peripheral.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "busy", "bits": 1, "attr": "R" },
+                    { "name": "ack", "bits": 1, "attr": "R" },
+                    { "bits": 6, "attr": "ResR0" },
+                ]
+
+        - The ``busy`` field is set when the PHY is currently performing an action, and unable to accept any requests.
+        - The ``ack`` field contains the ACK/NACK value of the last write.
+        """
         busy: csr.Field(csr.action.R, unsigned(1))
         ack: csr.Field(csr.action.R, unsigned(1))
 
-    """
-    A minimal I2C controller wrapping the Glasgow core
-    """
     def __init__(self):
         regs = csr.Builder(addr_width=5, data_width=8)
 

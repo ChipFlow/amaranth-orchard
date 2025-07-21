@@ -111,14 +111,36 @@ class SPIController(wiring.Component):
 
 
 class SPIPeripheral(wiring.Component):
+    """
+    A custom, minimal SPI controller
+
+    Transfers up to a width of 32 bits are supported, as are all SPI modes.
+    """
+
     class Config(csr.Register, access="rw"):
-        """
-        sck_idle: idle state of sck, '1' to invert sck
-        sck_edge:
-            1 to latch output on rising sck edge, read input on falling sck edge
-            0 to read input on rising sck edge, latch output on falling sck edge
-        chip_select: write '1' to assert (bring low) chip select output
-        width: width of transfer, minus 1
+        """Config register.
+
+        This :class:`Register` is written to in order to configure the SPI mode and transaction.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "sck_idle", "bits": 1, "attr": "RW" },
+                    { "name": "sck_edge", "bits": 1, "attr": "RW" },
+                    { "name": "chip_select", "bits": 1, "attr": "RW" },
+                    { "name": "width", "bits": 5, "attr": "RW" },
+                ]
+
+        - The ``sck_idle`` field is used to invert the SCK polarity, ``0b0`` for an idle low SCK, ``0b1`` for an idle high SCK
+        - The ``sck_edge`` field selects which edge is used for input and output data.
+            - ``0b0`` to read input on rising SCK edge, latch output on falling SCK edge
+            - ``0b1`` to latch output on rising SCK edge, read input on falling SCK edge
+        - The ``chip_select`` field controls the CS pin; setting it to ``0b1`` asserts (brings low) chip select.
+        - The ``width`` field configures the width of the transfer. It is set to the width of the transfer minus 1,
+        ``31`` gives the maximum width of 32.
         """
         sck_idle: csr.Field(csr.action.RW, unsigned(1))
         sck_edge: csr.Field(csr.action.RW, unsigned(1))
@@ -126,25 +148,71 @@ class SPIPeripheral(wiring.Component):
         width: csr.Field(csr.action.RW, unsigned(5))
 
     class Divider(csr.Register, access="rw"):
-        """SPI SCK clock divider, 1 = divide by 4"""
+        """Divider register.
+
+        This :class:`Register` is used to configure the clock frequency of the I2C peripheral.
+
+        The SCK frequency is the input clock frequency divided by 4 times the value in this register.
+        For example, for a SCK of 1/12 the system clock, this register would be set to 3.
+        """
         val: csr.Field(csr.action.RW, unsigned(8))
 
     class SendData(csr.Register, access="w"):
-        """data to transmit, must be left justified (bits [31..32-N] used)"""
+        """SendData register.
+
+        Writing to this :class:`Register` starts a read/write transfer on the SPI bus, the width of which is configured in `Config`.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 32
+
+                [
+                    { "name": "val", "bits": 32, "attr": "W" },
+                ]
+
+        - The `val` field must be left-justified, so for a transfer of ``N`` bits, bits ``[31..32-N]`` are used.
+        """
+
         val: csr.Field(csr.action.W, unsigned(32))
 
     class ReceiveData(csr.Register, access="r"):
-        """data received, is right justified (bits [N-1..0] used)"""
+        """ReceiveData register.
+
+        This :class:`Register` contains the read data of the last transfer started with a write to ``SendData``.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "val", "bits": 32, "attr": "R" },
+                ]
+
+        - The `val` field is right-justified, so for a transfer of ``N`` bits, bits ``[N-1..0]`` are used.
+        """
         val: csr.Field(csr.action.R, unsigned(32))
 
     class Status(csr.Register, access="r"):
-        """recv_full is 1 when transfer has been completed. reset to zero by reading receive_data"""
+        """Status register.
+
+        This :class:`Register` contains the status of the peripheral.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "recv_full", "bits": 1, "attr": "R" },
+                    { "bits": 7, "attr": "ResR0" },
+                ]
+
+        - The ``recv_full`` field is set to ``0b1`` when a transfer is completed. It is reset to zero by reading ``ReceiveData``.
+        """
         recv_full: csr.Field(csr.action.R, unsigned(1))
 
-
-    """
-    A custom, minimal SPI controller
-    """
     def __init__(self):
         regs = csr.Builder(addr_width=5, data_width=8)
 
