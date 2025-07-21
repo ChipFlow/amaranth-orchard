@@ -51,7 +51,7 @@ def list_resources(mm: MemoryMap) -> dict:
     d = {}
     for resource, rname, _ in mm.resources():
         cls = resource.__class__
-        print(f"adding resource {resource}. {type(resource)} {cls.__name__}, {cls.__qualname__}, {cls.__doc__}")
+        #print(f"adding resource {resource}. {type(resource)} {cls.__name__}, {cls.__qualname__}, {cls.__doc__}")
         ri = mm.find_resource(resource)
         d[name_to_str(rname)] = {
                 'resource': docs_for_obj(resource),
