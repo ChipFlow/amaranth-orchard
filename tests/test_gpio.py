@@ -5,11 +5,8 @@
 import unittest
 from amaranth import *
 from amaranth.sim import *
-from chipflow_digital_ip.base.coverage import ToggleCoverageObserver
-from chipflow_digital_ip.base.base import Observer, BaseEngine
-# from chipflow_digital_ip.base.vcd_writer import _VCDWriter
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.io import GPIOPeripheral
-from amaranth.sim import Tick, Simulator
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):
@@ -176,6 +173,16 @@ class PeripheralTestCase(unittest.TestCase):
         for signal, toggles in results.items():
             print(f"{signal}: 0→1={toggles['0->1']}, 1→0={toggles['1->0']}")
             assert toggles["0->1"] > 0 or toggles["1->0"] > 0, f"No toggles detected on {signal}"
+
+        for signal_name, bit_toggles in results.items():
+            print(f"{signal_name}:")
+            for bit, counts in bit_toggles.items():
+                zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
+                one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
+                print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
+                self.assertGreaterEqual(zero_to_one, 1, f"{signal_name}[{bit}] did not toggle 0→1")
+                self.assertGreaterEqual(one_to_zero, 1, f"{signal_name}[{bit}] did not toggle 1→0")
+
 
     def test_sim_without_input_sync(self):
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8, input_stages=0)

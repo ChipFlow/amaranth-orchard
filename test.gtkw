@@ -1,0 +1,13 @@
+[dumpfile] "/Users/ivyyu/Desktop/ChipFlow/chipflow-digital-ip/test.vcd"
+[dumpfile_size] 20398
+[treeopen] top.
+@22
+bench.top.bus__addr$3[1:0]
+bench.top.bus__r_stb$7
+bench.top.bus__w_stb$11
+bench.top.bus__w_data$9[7:0]
+bench.top.bus__r_data[7:0]
+bench.top.pins__gpio__i[3:0]
+bench.top.pins__gpio__o[3:0]
+bench.top.pins__gpio__oe[3:0]
+bench.alt_mode[3:0]
