@@ -15,9 +15,6 @@ class ToggleCoverageObserver(Observer):
         super().__init__(**kwargs)
 
     def update_signal(self, timestamp, signal):
-        if getattr(signal, "name", "") != "out":
-            return
-
         sig_id = id(signal)
         try:
             val = eval_value(self.state, signal)
@@ -27,7 +24,7 @@ class ToggleCoverageObserver(Observer):
             curr_val = int(val)
         except TypeError:
             curr_val = val
-        print(f"[DEBUG] Signal {getattr(signal, 'name', signal)} = {curr_val}")
+        # print(f"[DEBUG] Signal {getattr(signal, 'name', signal)} = {curr_val}")
 
         if sig_id not in self._prev_values:
             self._prev_values[sig_id] = curr_val
