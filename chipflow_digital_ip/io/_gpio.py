@@ -1,4 +1,3 @@
-from typing import Unpack
 
 from amaranth import Module, unsigned
 from amaranth.lib import wiring
@@ -6,8 +5,7 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr, gpio
 
-from chipflow_lib.platforms import BidirIOSignature, IOModelOptions
-from chipflow_lib._signatures import GPIOSignature
+from chipflow_lib.platforms import GPIOSignature
 
 __all__ = ["GPIOPeripheral"]
 
