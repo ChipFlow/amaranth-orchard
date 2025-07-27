@@ -2,10 +2,10 @@
 
 # SPDX-License-Identifier: BSD-2-Clause
 
-from amaranth import Module
-from amaranth.sim import Simulator
+from amaranth import *
+from amaranth.sim import *
 from chipflow_digital_ip.memory import HyperRAM
-
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 
 def test_hyperram_smoke():
     m = Module()
@@ -37,6 +37,18 @@ def test_hyperram_smoke():
                 yield hram.data_bus.stb.eq(0)
                 yield hram.data_bus.cyc.eq(0)
             yield
+    toggle_cov = ToggleCoverageObserver(sim._engine.state)
+    sim._engine.add_observer(toggle_cov)
     sim.add_sync_process(process)
     with sim.write_vcd("hyperram.vcd", "hyperram.gtkw"):
         sim.run()
+
+    results = toggle_cov.get_results()
+    print("=== Toggle Coverage Report ===")
+
+    for signal_name, bit_toggles in results.items():
+        print(f"{signal_name}:")
+        for bit, counts in bit_toggles.items():
+            zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
+            one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
+            print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")

@@ -2,7 +2,6 @@
 
 # SPDX-License-Identifier: BSD-2-Clause
 # chipflow-digital-ip % PYTHONPATH=. pdm run pytest -s tests/test_gpio.py
-import sys
 import unittest
 from amaranth import *
 from amaranth.sim import *
@@ -172,7 +171,6 @@ class PeripheralTestCase(unittest.TestCase):
 
         results = toggle_cov.get_results()
         print("=== Toggle Coverage Report ===")
-        sys.stdout.flush()
 
         for signal_name, bit_toggles in results.items():
             print(f"{signal_name}:")

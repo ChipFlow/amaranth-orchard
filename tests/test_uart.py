@@ -8,6 +8,8 @@ from amaranth.sim import *
 
 from chipflow_digital_ip.io import UARTPeripheral
 
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
+
 class PeripheralTestCase(unittest.TestCase):
 
     async def _csr_access(self, ctx, dut, addr, r_stb=0, w_stb=0, w_data=0, r_data=0):
@@ -118,9 +120,21 @@ class PeripheralTestCase(unittest.TestCase):
             await self._csr_access(ctx, dut, rx_addr|data_addr, r_stb=1, r_data=0x73)
 
         sim = Simulator(dut)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-6)
         sim.add_process(uart_rx_proc)
         sim.add_process(uart_tx_proc)
         sim.add_testbench(testbench)
         with sim.write_vcd(vcd_file="test_uart.vcd"):
             sim.run()
+
+        results = toggle_cov.get_results()
+        print("=== Toggle Coverage Report ===")
+
+        for signal_name, bit_toggles in results.items():
+            print(f"{signal_name}:")
+            for bit, counts in bit_toggles.items():
+                zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
+                one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
+                print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")

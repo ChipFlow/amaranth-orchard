@@ -5,7 +5,7 @@ from amaranth import *
 from amaranth.lib import enum, data, wiring, stream
 from amaranth.lib.wiring import In, Out, connect
 from amaranth.sim import *
-
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.memory.glasgow_qspi import QSPIMode
 from chipflow_digital_ip.memory.qspi_flash import WishboneQSPIFlashController
 
@@ -225,7 +225,19 @@ class QSPITestCase(unittest.TestCase):
             self.assertEqual(ctx.get(phy.last_command), _QSPIFlashCommand.FastRead)
 
         sim = Simulator(m)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        sim._engine.add_observer(toggle_cov)    
         sim.add_clock(period=1 / 48e6)
         sim.add_testbench(testbench)
         with sim.write_vcd(vcd_file="test_qspi.vcd"):
             sim.run()
+
+        results = toggle_cov.get_results()
+        print("=== Toggle Coverage Report ===")
+
+        for signal_name, bit_toggles in results.items():
+            print(f"{signal_name}:")
+            for bit, counts in bit_toggles.items():
+                zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
+                one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
+                print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
