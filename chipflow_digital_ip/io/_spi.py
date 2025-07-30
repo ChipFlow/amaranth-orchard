@@ -3,10 +3,13 @@ from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 
 from amaranth_soc import csr
-from chipflow_lib.platforms import SPISignature
+from chipflow_lib.platforms import SPISignature, driver_model
+
 
 __all__ = ["SPIPeripheral"]
 
+
+@driver_model(c_files=['drivers/spi.c'], h_files=['drivers/spi.h'])
 class SPIController(wiring.Component):
     def __init__(self):
         super().__init__({

@@ -6,10 +6,12 @@ from amaranth.lib.wiring import In, flipped, connect
 
 from amaranth_soc import csr
 
+from chipflow_lib.platforms import driver_model
 
 __all__ = ["SoCID"]
 
 
+@driver_model(h_files=['drivers/soc_id.h'])
 class SoCID(wiring.Component):
     class Register(csr.Register, access="r"):
         def __init__(self, width):

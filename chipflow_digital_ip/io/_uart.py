@@ -5,7 +5,7 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 from amaranth_soc import csr
 from amaranth_stdio.serial import AsyncSerialRX, AsyncSerialTX
 
-from chipflow_lib.platforms import UARTSignature
+from chipflow_lib.platforms import UARTSignature, driver_model
 
 from . import _rfc_uart
 
@@ -117,7 +117,7 @@ class UARTPhy(wiring.Component):
 
         return m
 
-
+@driver_model(c_files=['drivers/uart.c'], h_files=['drivers/uart.h'])
 class UARTPeripheral(wiring.Component):
 
     """Wrapper for amaranth_soc RFC UART with PHY and chipflow_lib.IOSignature support

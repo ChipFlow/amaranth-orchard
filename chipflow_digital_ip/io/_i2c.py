@@ -3,12 +3,13 @@ from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 
 from amaranth_soc import csr
-from chipflow_lib.platforms import I2CSignature
+from chipflow_lib.platforms import I2CSignature, driver_model
 from ._glasgow_i2c import I2CInitiator
 
 __all__ = ["I2CPeripheral"]
 
 
+@driver_model(c_files=['drivers/i2c.c'], h_files=['drivers/i2c.h'])
 class I2CPeripheral(wiring.Component):
     class Divider(csr.Register, access="rw"):
         """I2C SCK clock divider, 1 = divide by 4"""

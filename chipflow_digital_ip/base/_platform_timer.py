@@ -1,13 +1,15 @@
 from amaranth import *
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, flipped, connect
-
 from amaranth_soc import csr
+
+from chipflow_lib.platforms import driver_model
 
 
 __all__ = ["PlatformTimer"]
 
 
+@driver_model(c_files=['drivers/plat_timer.c'], h_files=['drivers/plat_timer.h'])
 class PlatformTimer(wiring.Component):
     class CNT(csr.Register, access="r"):
         """Cycle counter (read-only)."""

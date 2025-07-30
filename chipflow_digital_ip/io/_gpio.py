@@ -5,11 +5,12 @@ from amaranth.lib.wiring import In, Out, flipped, connect
 
 from amaranth_soc import csr, gpio
 
-from chipflow_lib.platforms import GPIOSignature
+from chipflow_lib.platforms import GPIOSignature, driver_model
 
 __all__ = ["GPIOPeripheral"]
 
 
+@driver_model(h_files=['drivers/gpio.h'])
 class GPIOPeripheral(wiring.Component):
 
     """Wrapper for amaranth_soc gpio with chipflow_lib.IOSignature support
