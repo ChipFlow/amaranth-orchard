@@ -7,6 +7,60 @@ from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.io import GPIOPeripheral
+import re
+
+def parse_vcd_signals(vcd_file):
+    vcd_signals = {}
+    scope = []
+    with open(vcd_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("$scope"):
+                tokens = line.split()
+                if len(tokens) >= 3:
+                    scope.append(tokens[2])
+            elif line.startswith("$upscope"):
+                if scope:
+                    scope.pop()
+            elif line.startswith("$var"):
+                tokens = line.split()
+                if len(tokens) >= 5:
+                    symbol = tokens[3]
+                    signal_name = tokens[4]
+                    full_path = "/".join(scope + [signal_name])
+                    vcd_signals[symbol] = full_path
+            elif line.startswith("$enddefinitions"):
+                break
+    return vcd_signals
+
+
+def collect_all_signals(dut):
+    signals = []
+
+    def _collect(obj, path=None):
+        if path is None:
+            path = []
+        for attr_name in dir(obj):
+            if attr_name.startswith("_"):
+                continue 
+            try:
+                attr = getattr(obj, attr_name)
+            except Exception:
+                continue
+            if isinstance(attr, Signal):
+                signals.append(attr)
+            elif hasattr(attr, "ports") or hasattr(attr, "submodules") or hasattr(attr, "elaborate"):
+                _collect(attr, path + [attr_name])
+            elif isinstance(attr, (list, tuple)):
+                for elem in attr:
+                    if isinstance(elem, Signal):
+                        signals.append(elem)
+        if hasattr(obj, "submodules"):
+            for subm in obj.submodules:
+                _collect(subm, path + [str(subm)])
+
+    _collect(dut)
+    return signals
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):
@@ -162,10 +216,8 @@ class PeripheralTestCase(unittest.TestCase):
         sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-6)
         sim.add_testbench(testbench)
-        with sim.write_vcd(vcd_file="smoke_test.vcd", gtkw_file="smoke_test.gtkw", traces=[
-            dut.bus.addr, dut.bus.r_stb, dut.bus.w_stb, dut.bus.w_data, dut.bus.r_data,
-            dut.pins.gpio.i, dut.pins.gpio.o, dut.pins.gpio.oe, dut.alt_mode
-        ]):
+        all_signals = collect_all_signals(dut)
+        with sim.write_vcd(vcd_file="smoke_test.vcd", gtkw_file="smoke_test.gtkw", traces=all_signals):
             print("Running simulation and writing VCD...")
             sim.run()
 
@@ -178,9 +230,6 @@ class PeripheralTestCase(unittest.TestCase):
                 zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
                 one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
                 print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
-                # self.assertGreaterEqual(zero_to_one, 1, f"{signal_name}[{bit}] did not toggle 0→1")
-                # self.assertGreaterEqual(one_to_zero, 1, f"{signal_name}[{bit}] did not toggle 1→0")
-
 
     def test_sim_without_input_sync(self):
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8, input_stages=0)
