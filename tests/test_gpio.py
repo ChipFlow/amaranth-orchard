@@ -61,6 +61,15 @@ def collect_all_signals(dut):
 
     _collect(dut)
     return signals
+    
+def get_signal_full_paths(design):
+    signal_path_map = {}
+    for fragment, fragment_info in design.fragments.items():
+        fragment_name = ("bench", *fragment_info.name)
+        for signal, signal_name in fragment_info.signal_names.items():
+            path = "/".join(fragment_name + (signal_name,))
+            signal_path_map[id(signal)] = path 
+    return signal_path_map
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):
@@ -212,7 +221,9 @@ class PeripheralTestCase(unittest.TestCase):
             self.assertEqual(ctx.get(dut.pins.gpio.o), 0b1010)
 
         sim = Simulator(dut)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        design = sim._engine._design
+        signal_path_map = get_signal_full_paths(design)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
         sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-6)
         sim.add_testbench(testbench)

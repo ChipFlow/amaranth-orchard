@@ -7,11 +7,12 @@ class ToggleDirection(Enum):
     ONE_TO_ZERO = auto()
 
 class ToggleCoverageObserver(Observer):
-    def __init__(self, state, **kwargs):
+    def __init__(self, state, signal_path_map=None, **kwargs):
         self.state = state
         self._prev_values = {}
         self._toggles = {}
         self._signal_names = {}
+        self._signal_path_map = signal_path_map or {}
         super().__init__(**kwargs)
 
     def update_signal(self, timestamp, signal):
@@ -31,7 +32,7 @@ class ToggleCoverageObserver(Observer):
                 i: {ToggleDirection.ZERO_TO_ONE: 0, ToggleDirection.ONE_TO_ZERO: 0}
                 for i in range(signal.shape().width)
             }
-            self._signal_names[sig_id] = signal.name  
+            self._signal_names[sig_id] = self._signal_path_map.get(sig_id, signal.name)
             return
 
         prev_val = self._prev_values[sig_id]
