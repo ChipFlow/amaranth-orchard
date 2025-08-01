@@ -6,6 +6,7 @@ from amaranth import *
 from amaranth.sim import *
 from chipflow_digital_ip.memory import HyperRAM
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 def test_hyperram_smoke():
     m = Module()
@@ -37,9 +38,12 @@ def test_hyperram_smoke():
                 yield hram.data_bus.stb.eq(0)
                 yield hram.data_bus.cyc.eq(0)
             yield
-    toggle_cov = ToggleCoverageObserver(sim._engine.state)
+    design = sim._engine._design
+    signal_path_map = get_signal_full_paths(design)
+    toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
     sim._engine.add_observer(toggle_cov)
     sim.add_sync_process(process)
+    all_signals = collect_all_signals(m)
     with sim.write_vcd("hyperram.vcd", "hyperram.gtkw"):
         sim.run()
 
@@ -52,3 +56,8 @@ def test_hyperram_smoke():
             zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
             one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
             print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
+
+
+
+
+

@@ -9,6 +9,7 @@ from amaranth.sim import *
 from chipflow_digital_ip.io import UARTPeripheral
 
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 class PeripheralTestCase(unittest.TestCase):
 
@@ -120,12 +121,15 @@ class PeripheralTestCase(unittest.TestCase):
             await self._csr_access(ctx, dut, rx_addr|data_addr, r_stb=1, r_data=0x73)
 
         sim = Simulator(dut)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        design = sim._engine._design
+        signal_path_map = get_signal_full_paths(design)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
         sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-6)
         sim.add_process(uart_rx_proc)
         sim.add_process(uart_tx_proc)
         sim.add_testbench(testbench)
+        all_signals = collect_all_signals(dut)
         with sim.write_vcd(vcd_file="test_uart.vcd"):
             sim.run()
 

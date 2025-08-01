@@ -8,6 +8,7 @@ from amaranth.sim import *
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.memory.glasgow_qspi import QSPIMode
 from chipflow_digital_ip.memory.qspi_flash import WishboneQSPIFlashController
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 class _QSPIFlashCommand(enum.Enum, shape=8):
     Read                = 0x03
@@ -225,10 +226,13 @@ class QSPITestCase(unittest.TestCase):
             self.assertEqual(ctx.get(phy.last_command), _QSPIFlashCommand.FastRead)
 
         sim = Simulator(m)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        design = sim._engine._design
+        signal_path_map = get_signal_full_paths(design)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
         sim._engine.add_observer(toggle_cov)    
         sim.add_clock(period=1 / 48e6)
         sim.add_testbench(testbench)
+        all_signals = collect_all_signals(m)
         with sim.write_vcd(vcd_file="test_qspi.vcd"):
             sim.run()
 

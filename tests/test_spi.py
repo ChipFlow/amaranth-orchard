@@ -7,6 +7,7 @@ from amaranth.sim import Simulator
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.io import SPIPeripheral
 import unittest
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 class TestSpiPeripheral(unittest.TestCase):
 
@@ -121,10 +122,13 @@ class TestSpiPeripheral(unittest.TestCase):
             await ctx.tick()
             await self._check_reg(ctx, dut, self.REG_STATUS, 1, 1) # full
         sim = Simulator(dut)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        design = sim._engine._design
+        signal_path_map = get_signal_full_paths(design)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
         sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-5)
         sim.add_testbench(testbench)
+        all_signals = collect_all_signals(dut)
         with sim.write_vcd("spi_div_test.vcd", "spi_div_test.gtkw"):
             sim.run()
 

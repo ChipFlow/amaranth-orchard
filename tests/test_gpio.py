@@ -7,69 +7,7 @@ from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.io import GPIOPeripheral
-import re
-
-def parse_vcd_signals(vcd_file):
-    vcd_signals = {}
-    scope = []
-    with open(vcd_file, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("$scope"):
-                tokens = line.split()
-                if len(tokens) >= 3:
-                    scope.append(tokens[2])
-            elif line.startswith("$upscope"):
-                if scope:
-                    scope.pop()
-            elif line.startswith("$var"):
-                tokens = line.split()
-                if len(tokens) >= 5:
-                    symbol = tokens[3]
-                    signal_name = tokens[4]
-                    full_path = "/".join(scope + [signal_name])
-                    vcd_signals[symbol] = full_path
-            elif line.startswith("$enddefinitions"):
-                break
-    return vcd_signals
-
-
-def collect_all_signals(dut):
-    signals = []
-
-    def _collect(obj, path=None):
-        if path is None:
-            path = []
-        for attr_name in dir(obj):
-            if attr_name.startswith("_"):
-                continue 
-            try:
-                attr = getattr(obj, attr_name)
-            except Exception:
-                continue
-            if isinstance(attr, Signal):
-                signals.append(attr)
-            elif hasattr(attr, "ports") or hasattr(attr, "submodules") or hasattr(attr, "elaborate"):
-                _collect(attr, path + [attr_name])
-            elif isinstance(attr, (list, tuple)):
-                for elem in attr:
-                    if isinstance(elem, Signal):
-                        signals.append(elem)
-        if hasattr(obj, "submodules"):
-            for subm in obj.submodules:
-                _collect(subm, path + [str(subm)])
-
-    _collect(dut)
-    return signals
-    
-def get_signal_full_paths(design):
-    signal_path_map = {}
-    for fragment, fragment_info in design.fragments.items():
-        fragment_name = ("bench", *fragment_info.name)
-        for signal, signal_name in fragment_info.signal_names.items():
-            path = "/".join(fragment_name + (signal_name,))
-            signal_path_map[id(signal)] = path 
-    return signal_path_map
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):

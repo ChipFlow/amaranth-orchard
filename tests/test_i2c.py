@@ -7,6 +7,7 @@ from amaranth.sim import Simulator
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from chipflow_digital_ip.io import I2CPeripheral
 import unittest
+from tests.test_utils import get_signal_full_paths, collect_all_signals
 
 class _I2CHarness(Elaboratable):
     def __init__(self):
@@ -79,10 +80,13 @@ class TestI2CPeripheral(unittest.TestCase):
             await self._check_reg(ctx, dut.i2c, self.REG_STATUS, 0, 1) # not busy
 
         sim = Simulator(dut)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state)
+        design = sim._engine._design
+        signal_path_map = get_signal_full_paths(design)
+        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
         sim._engine.add_observer(toggle_cov)
         sim.add_clock(1e-5)
         sim.add_testbench(testbench)
+        all_signals = collect_all_signals(dut)
         with sim.write_vcd("i2c_start_test.vcd", "i2c_start_test.gtkw"):
             sim.run()
         results = toggle_cov.get_results()
@@ -167,3 +171,6 @@ class TestI2CPeripheral(unittest.TestCase):
         sim.add_testbench(testbench)
         with sim.write_vcd("i2c_read_test.vcd", "i2c_read_test.gtkw"):
             sim.run()
+
+
+
