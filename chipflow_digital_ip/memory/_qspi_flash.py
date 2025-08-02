@@ -11,10 +11,9 @@ from amaranth_soc.memory import MemoryMap
 from ..io._glasgow_iostream import PortGroup
 from ..memory._glasgow_qspi import QSPIMode, QSPIController
 
-from chipflow_lib.platforms import QSPIFlashSignature, driver_model
+from chipflow_lib.platforms import QSPIFlashSignature, DriverSignature
 
 
-@driver_model(c_files=Path('drivers').glob('spiflash.[cS]'), h_files=['drivers/spiflash.h'])
 class QSPIFlashCommand(enum.Enum, shape=8):
     Read                = 0x03
     FastRead            = 0x0B
@@ -252,11 +251,20 @@ class WishboneQSPIFlashController(wiring.Component):
 
 class QSPIFlash(wiring.Component):
     def __init__(self, *, addr_width, data_width):
-        super().__init__({
-            "pins": Out(QSPIFlashSignature()),
-            "csr_bus": In(csr.Signature(addr_width=4, data_width=8)),
-            "wb_bus": In(wishbone.Signature(addr_width=addr_width, data_width=data_width, granularity=8)),
-        })
+        super().__init__(
+            DriverSignature(
+                members={
+                    "pins": Out(QSPIFlashSignature()),
+                    "csr_bus": In(csr.Signature(addr_width=4, data_width=8)),
+                    "wb_bus": In(wishbone.Signature(addr_width=addr_width, data_width=data_width, granularity=8)),
+                },
+                component=self,
+                regs_struct='spiflash_regs_t',
+                regs_bus="csr_bus",
+                c_files=['drivers/spiflash.c', 'drivers/spiflash.S'],
+                h_files=['drivers/spiflash.h'],
+                )
+            )
 
         self._ctrl = WishboneQSPIFlashController(addr_width=addr_width, data_width=data_width)
         self.csr_bus.memory_map = self._ctrl.csr_bus.memory_map
@@ -270,6 +278,7 @@ class QSPIFlash(wiring.Component):
         self._phy = QSPIController(ports=self.qspi_ports)
 
     def elaborate(self, platform):
+        print(f"Enablorating QSPIController. siagnture = {self.signature.__dict__}, annotations={[a.as_json() for a in self.signature.annotations(self)]}")
         m = Module()
 
         m.submodules.ctrl = self._ctrl

@@ -3,13 +3,12 @@ from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, connect, flipped
 
 from amaranth_soc import csr
-from chipflow_lib.platforms import I2CSignature, driver_model
+from chipflow_lib.platforms import I2CSignature, DriverSignature
 from ._glasgow_i2c import I2CInitiator
 
 __all__ = ["I2CPeripheral"]
 
 
-@driver_model(c_files=['drivers/i2c.c'], h_files=['drivers/i2c.h'])
 class I2CPeripheral(wiring.Component):
     class Divider(csr.Register, access="rw"):
         """I2C SCK clock divider, 1 = divide by 4"""
@@ -56,10 +55,20 @@ class I2CPeripheral(wiring.Component):
 
         self._bridge = csr.Bridge(regs.as_memory_map())
 
-        super().__init__({
-            "i2c_pins": Out(I2CSignature()),
-            "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
-        })
+        super().__init__(
+            DriverSignature(
+                members={
+                    "i2c_pins": Out(I2CSignature()),
+                    "bus": In(csr.Signature(addr_width=regs.addr_width, data_width=regs.data_width)),
+                },
+                component=self,
+                regs_struct='i2c_regs_t',
+                c_files=['drivers/i2c.c'],
+                h_files=['drivers/i2c.h'],
+                )
+
+            )
+
         self.bus.memory_map = self._bridge.bus.memory_map
 
     def elaborate(self, platform):
