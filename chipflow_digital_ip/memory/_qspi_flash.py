@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 from amaranth import *
 from amaranth.lib import enum, data, wiring, stream, io
 from amaranth.lib.wiring import In, Out, connect, flipped
@@ -278,7 +279,6 @@ class QSPIFlash(wiring.Component):
         self._phy = QSPIController(ports=self.qspi_ports)
 
     def elaborate(self, platform):
-        print(f"Enablorating QSPIController. siagnture = {self.signature.__dict__}, annotations={[a.as_json() for a in self.signature.annotations(self)]}")
         m = Module()
 
         m.submodules.ctrl = self._ctrl
