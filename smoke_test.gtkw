@@ -1,5 +1,3 @@
 [dumpfile] "/Users/ivyyu/Desktop/ChipFlow/chipflow-digital-ip/smoke_test.vcd"
-[dumpfile_size] 20398
+[dumpfile_size] 21176
 [treeopen] top.
-@22
-bench.alt_mode[3:0]

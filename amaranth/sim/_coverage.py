@@ -65,29 +65,28 @@ class ToggleCoverageObserver(Observer):
                 print(f"  Bit {bit}: 0→1={counts[ToggleDirection.ZERO_TO_ONE]}, 1→0={counts[ToggleDirection.ONE_TO_ZERO]}")
 
 
+class StatementCoverageObserver(Observer):
+    def __init__(self, coverage_signal_map, state, stmtid_to_name, **kwargs):
+        self.coverage_signal_map = coverage_signal_map
+        self.state = state
+        self._statement_hits = {}
+        self.stmtid_to_name = stmtid_to_name  
+        super().__init__(**kwargs)
 
+    def update_signal(self, timestamp, signal):
+        sig_id = id(signal)
+        if sig_id in self.coverage_signal_map:
+            stmt_id = self.coverage_signal_map[sig_id]
+            self._statement_hits[stmt_id] = self._statement_hits.get(stmt_id, 0) + 1
 
+    def update_memory(self, timestamp, memory, addr):
+        pass
 
-# class StatementCoverageObserver(Observer):
-#     def __init__(self, **kwargs):
-#         self._statement_hits = {}
-#         super().__init__(**kwargs)
+    def get_results(self):
+        return self._statement_hits
 
-#     def record_statement_hit(self, statement_id: str):
-#         if statement_id not in self._statement_hits:
-#             self._statement_hits[statement_id] = 0
-#         self._statement_hits[statement_id] += 1
-    
-#     def update_signal(self, timestamp, signal):
-#         pass
-
-#     def update_memory(self, timestamp, memory, addr):
-#         pass
-
-#     def get_result(self):
-#         return self._statement_hits
-
-#     def close(self, timestamp):
-#         print("=== Statement Coverage Report ===")
-#         for stmt_id, count in sorted(self._statement_hits.items()):
-#             print(f"{stmt_id}:{'HIT' if count > 0 else 'MISS'} ({count} times)")
+    def close(self, timestamp):
+        print("=== Statement Coverage Report ===")
+        for stmt_id, count in sorted(self._statement_hits.items()):
+            name = self.stmtid_to_name.get(stmt_id, str(stmt_id))
+            print(f"{name}: {'HIT' if count > 0 else 'MISS'} ({count} times)")

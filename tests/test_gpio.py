@@ -5,9 +5,12 @@
 import unittest
 from amaranth import *
 from amaranth.sim import *
-from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
-from chipflow_digital_ip.io import GPIOPeripheral
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection, StatementCoverageObserver
 from tests.test_utils import get_signal_full_paths, collect_all_signals
+from amaranth.sim._coverage import StatementCoverageObserver
+from tests.test_utils import get_assign_name, tag_assign_statements, insert_coverage_signals
+from chipflow_digital_ip.io import GPIOPeripheral
+from amaranth.hdl._ir import Fragment
 
 class PeripheralTestCase(unittest.TestCase):
     def test_init(self):
@@ -54,6 +57,21 @@ class PeripheralTestCase(unittest.TestCase):
         Smoke test GPIO. We assume that amaranth-soc GPIO tests are fully testing functionality.
         """
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8)
+        mod = dut.elaborate(platform=None)
+        fragment = Fragment.get(mod, platform=None)
+        tag_assign_statements(fragment)
+        coverage_signals = insert_coverage_signals(fragment) 
+        signal_to_stmtid = { id(sig): stmt_id for stmt_id, sig in coverage_signals.items() }
+
+        stmtid_to_name = {}
+        for domain, stmts in fragment.statements.items():
+            for stmt in stmts:
+                if hasattr(stmt, "_coverage_id") and hasattr(stmt, "_coverage_name"):
+                    stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
+
+        sim = Simulator(fragment)
+        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_name)
+        sim._engine.add_observer(statement_cov)
 
         mode_addr   = 0x0
         input_addr  = 0x1
@@ -158,27 +176,24 @@ class PeripheralTestCase(unittest.TestCase):
             self.assertEqual(ctx.get(dut.pins.gpio.oe), 0b1111)
             self.assertEqual(ctx.get(dut.pins.gpio.o), 0b1010)
 
-        sim = Simulator(dut)
-        design = sim._engine._design
-        signal_path_map = get_signal_full_paths(design)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
-        sim._engine.add_observer(toggle_cov)
+        # sim = Simulator(dut)
+        # design = sim._engine._design
+        # signal_path_map = get_signal_full_paths(design)
+        # toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
+        # sim._engine.add_observer(toggle_cov)
+
         sim.add_clock(1e-6)
         sim.add_testbench(testbench)
-        all_signals = collect_all_signals(dut)
+        # all_signals = collect_all_signals(dut)
+        all_signals = collect_all_signals(fragment)
         with sim.write_vcd(vcd_file="smoke_test.vcd", gtkw_file="smoke_test.gtkw", traces=all_signals):
             print("Running simulation and writing VCD...")
             sim.run()
 
-        results = toggle_cov.get_results()
-        print("=== Toggle Coverage Report ===")
-
-        for signal_name, bit_toggles in results.items():
-            print(f"{signal_name}:")
-            for bit, counts in bit_toggles.items():
-                zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
-                one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
-                print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
+        # results = toggle_cov.get_results()
+        # toggle_cov.close(0)
+        results = statement_cov.get_results()
+        statement_cov.close(0)
 
     def test_sim_without_input_sync(self):
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8, input_stages=0)
