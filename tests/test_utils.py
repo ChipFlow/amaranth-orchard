@@ -42,23 +42,35 @@ def get_signal_full_paths(design):
     return signal_path_map
 
 
-
 def get_assign_name(domain, stmt):
     def expr_name(expr):
-        if hasattr(expr, "name"):
-            return expr.name
         if hasattr(expr, "value") and hasattr(expr, "start") and hasattr(expr, "stop"):
             base = expr_name(expr.value)
             if expr.start == expr.stop - 1:
                 return f"{base}[{expr.start}]"
             else:
-                return f"{base}[{expr.stop-1}:{expr.start}]"
+                return f"{base}[{expr.start}:{expr.stop}]"
+        if hasattr(expr, "name"):
+            return expr.name
         if hasattr(expr, "value"):
             return str(expr.value)
         return str(expr)
+    src_loc = getattr(stmt, "src_loc", None)
+    if src_loc:
+        filename = src_loc[0]
+        lineno = src_loc[1]
+        anchor = "chipflow-digital-ip"
+        idx = filename.find(anchor)
+        if idx != -1:
+            filename = filename[idx:]
+        else:
+            filename = filename.split("/")[-1]
+        loc_str = f"{filename}:{lineno}"
+    else:
+        loc_str = "unknown"
     lhs = expr_name(stmt.lhs)
     rhs = expr_name(stmt.rhs)
-    return f"{domain}:{lhs} = {rhs}"
+    return f"{loc_str} | {domain}:{lhs} = {rhs}"
 
 def tag_assign_statements(fragment, coverage_id=0, parent_path=()):
     from amaranth.hdl._ast import Assign, Switch
@@ -87,46 +99,46 @@ def tag_assign_statements(fragment, coverage_id=0, parent_path=()):
     return coverage_id
 
 ## this version doesnt selectively skip assignments, use this for normal testing
-# def insert_coverage_signals(fragment):
-#     from amaranth.hdl._ast import Assign, Const, Signal
-#     coverage_signals = {}
-#     for domain, stmts in fragment.statements.items():
-#         for stmt in stmts:
-#             if hasattr(stmt, "_coverage_id"):
-#                 sig_name = f"cov_stmt_{stmt._coverage_id[-1]}"
-#                 coverage_signals[stmt._coverage_id] = Signal(name=sig_name, reset=0)
-#     for domain, stmts in fragment.statements.items():
-#         new_stmts = []
-#         for stmt in stmts:
-#             if hasattr(stmt, "_coverage_id"):
-#                 cov_sig = coverage_signals[stmt._coverage_id]
-#                 new_stmts.append(Assign(cov_sig, Const(1)))
-#             new_stmts.append(stmt)
-#         fragment.statements[domain] = new_stmts
-#     return coverage_signals
-
-
-## this version tests MISS by selectively skipping statements
 def insert_coverage_signals(fragment):
     from amaranth.hdl._ast import Assign, Const, Signal
     coverage_signals = {}
-    SKIP_COVERAGE_ID = 3
     for domain, stmts in fragment.statements.items():
         for stmt in stmts:
             if hasattr(stmt, "_coverage_id"):
-                if stmt._coverage_id[-1] == SKIP_COVERAGE_ID:
-                    continue
                 sig_name = f"cov_stmt_{stmt._coverage_id[-1]}"
                 coverage_signals[stmt._coverage_id] = Signal(name=sig_name, reset=0)
     for domain, stmts in fragment.statements.items():
         new_stmts = []
         for stmt in stmts:
             if hasattr(stmt, "_coverage_id"):
-                if stmt._coverage_id[-1] == SKIP_COVERAGE_ID:
-                    new_stmts.append(stmt)
-                    continue
                 cov_sig = coverage_signals[stmt._coverage_id]
                 new_stmts.append(Assign(cov_sig, Const(1)))
             new_stmts.append(stmt)
         fragment.statements[domain] = new_stmts
     return coverage_signals
+
+
+## this version tests MISS by selectively skipping statements
+# def insert_coverage_signals(fragment):
+#     from amaranth.hdl._ast import Assign, Const, Signal
+#     coverage_signals = {}
+#     SKIP_COVERAGE_ID = 3
+#     for domain, stmts in fragment.statements.items():
+#         for stmt in stmts:
+#             if hasattr(stmt, "_coverage_id"):
+#                 if stmt._coverage_id[-1] == SKIP_COVERAGE_ID:
+#                     continue
+#                 sig_name = f"cov_stmt_{stmt._coverage_id[-1]}"
+#                 coverage_signals[stmt._coverage_id] = Signal(name=sig_name, reset=0)
+#     for domain, stmts in fragment.statements.items():
+#         new_stmts = []
+#         for stmt in stmts:
+#             if hasattr(stmt, "_coverage_id"):
+#                 if stmt._coverage_id[-1] == SKIP_COVERAGE_ID:
+#                     new_stmts.append(stmt)
+#                     continue
+#                 cov_sig = coverage_signals[stmt._coverage_id]
+#                 new_stmts.append(Assign(cov_sig, Const(1)))
+#             new_stmts.append(stmt)
+#         fragment.statements[domain] = new_stmts
+#     return coverage_signals
