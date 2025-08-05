@@ -66,11 +66,11 @@ class ToggleCoverageObserver(Observer):
 
 
 class StatementCoverageObserver(Observer):
-    def __init__(self, coverage_signal_map, state, stmtid_to_name, **kwargs):
+    def __init__(self, coverage_signal_map, state, stmtid_to_name=None, **kwargs):
         self.coverage_signal_map = coverage_signal_map
         self.state = state
+        self.stmtid_to_name = stmtid_to_name or {}
         self._statement_hits = {}
-        self.stmtid_to_name = stmtid_to_name  
         super().__init__(**kwargs)
 
     def update_signal(self, timestamp, signal):
@@ -85,8 +85,22 @@ class StatementCoverageObserver(Observer):
     def get_results(self):
         return self._statement_hits
 
+    # def close(self, timestamp):
+    #     print("=== Statement Coverage Report ===")
+    #     for stmt_id, count in sorted(self._statement_hits.items()):
+    #         name = self.stmtid_to_name.get(stmt_id, str(stmt_id))
+    #         print(f"{name}: {'HIT' if count > 0 else 'MISS'} ({count} times)")
+
+
+    # def close(self, timestamp):
+    #     print("=== Statement Coverage Report ===")
+    #     for stmt_id, name in sorted(self.stmtid_to_name.items(), key=lambda x: x[0]):
+    #         count = self._statement_hits.get(stmt_id, 0)
+    #         print(f"{name}: {'HIT' if count > 0 else 'MISS'} ({count} times)")
+
+
     def close(self, timestamp):
         print("=== Statement Coverage Report ===")
-        for stmt_id, count in sorted(self._statement_hits.items()):
-            name = self.stmtid_to_name.get(stmt_id, str(stmt_id))
+        for stmt_id, name in sorted(self.stmtid_to_name.items()):
+            count = self._statement_hits.get(stmt_id, 0)
             print(f"{name}: {'HIT' if count > 0 else 'MISS'} ({count} times)")

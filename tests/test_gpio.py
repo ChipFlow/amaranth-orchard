@@ -70,7 +70,7 @@ class PeripheralTestCase(unittest.TestCase):
                     stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
 
         sim = Simulator(fragment)
-        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_name)
+        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_name=stmtid_to_name)
         sim._engine.add_observer(statement_cov)
 
         mode_addr   = 0x0
@@ -97,6 +97,7 @@ class PeripheralTestCase(unittest.TestCase):
             await self._csr_access(ctx, dut, input_addr, r_stb=1, r_data=0xa)
             await self._csr_access(ctx, dut, input_addr, r_stb=1, r_data=0x0)
 
+            # COMMENT OUT TO TEST MISS
             # - write 0xf to Output:
             await self._csr_access(ctx, dut, output_addr, r_stb=1, r_data=0x0, w_stb=1, w_data=0xf)
             await ctx.tick()
