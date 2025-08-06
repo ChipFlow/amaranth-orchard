@@ -6,9 +6,7 @@ import unittest
 from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection, StatementCoverageObserver
-from tests.test_utils import get_signal_full_paths, collect_all_signals
-from amaranth.sim._coverage import StatementCoverageObserver
-from tests.test_utils import get_assign_name, tag_assign_statements, insert_coverage_signals
+from tests.test_utils import *
 from chipflow_digital_ip.io import GPIOPeripheral
 from amaranth.hdl._ir import Fragment
 
@@ -59,7 +57,7 @@ class PeripheralTestCase(unittest.TestCase):
         dut = GPIOPeripheral(pin_count=4, addr_width=2, data_width=8)
         mod = dut.elaborate(platform=None)
         fragment = Fragment.get(mod, platform=None)
-        tag_assign_statements(fragment)
+        _, stmtid_to_info = tag_all_statements(fragment)
         coverage_signals = insert_coverage_signals(fragment) 
         signal_to_stmtid = { id(sig): stmt_id for stmt_id, sig in coverage_signals.items() }
 
@@ -70,7 +68,7 @@ class PeripheralTestCase(unittest.TestCase):
                     stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
 
         sim = Simulator(fragment)
-        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_name=stmtid_to_name)
+        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_info=stmtid_to_info)
         sim._engine.add_observer(statement_cov)
 
         mode_addr   = 0x0

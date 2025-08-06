@@ -1,13 +1,14 @@
 # amaranth: UnusedElaboratable=no
 
 # SPDX-License-Identifier: BSD-2-Clause
-
-from amaranth import *
-from amaranth.sim import Simulator
-from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
-from chipflow_digital_ip.io import I2CPeripheral
 import unittest
-from tests.test_utils import get_signal_full_paths, collect_all_signals
+from amaranth import *
+from amaranth.sim import *
+from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection, StatementCoverageObserver
+from chipflow_digital_ip.io import I2CPeripheral
+from tests.test_utils import *
+from amaranth.hdl._ir import Fragment
+
 
 class _I2CHarness(Elaboratable):
     def __init__(self):
@@ -58,6 +59,22 @@ class TestI2CPeripheral(unittest.TestCase):
     def test_start_stop(self):
         """Test I2C start and stop conditions"""
         dut = _I2CHarness()
+        mod = dut.elaborate(platform=None)
+        fragment = Fragment.get(mod, platform=None)
+        _, stmtid_to_info = tag_all_statements(fragment)
+        coverage_signals = insert_coverage_signals(fragment) 
+        signal_to_stmtid = { id(sig): stmt_id for stmt_id, sig in coverage_signals.items() }
+
+        stmtid_to_name = {}
+        for domain, stmts in fragment.statements.items():
+            for stmt in stmts:
+                if hasattr(stmt, "_coverage_id") and hasattr(stmt, "_coverage_name"):
+                    stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
+
+        sim = Simulator(fragment)
+        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_info=stmtid_to_info)
+        sim._engine.add_observer(statement_cov)
+
         async def testbench(ctx):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
             await ctx.tick()
@@ -79,25 +96,22 @@ class TestI2CPeripheral(unittest.TestCase):
             await ctx.tick()
             await self._check_reg(ctx, dut.i2c, self.REG_STATUS, 0, 1) # not busy
 
-        sim = Simulator(dut)
-        design = sim._engine._design
-        signal_path_map = get_signal_full_paths(design)
-        toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
-        sim._engine.add_observer(toggle_cov)
+        # sim = Simulator(dut)
+        # design = sim._engine._design
+        # signal_path_map = get_signal_full_paths(design)
+        # toggle_cov = ToggleCoverageObserver(sim._engine.state, signal_path_map=signal_path_map)
+        # sim._engine.add_observer(toggle_cov)
+
         sim.add_clock(1e-5)
         sim.add_testbench(testbench)
-        all_signals = collect_all_signals(dut)
+        # all_signals = collect_all_signals(dut)
+        all_signals = collect_all_signals(fragment)
         with sim.write_vcd("i2c_start_test.vcd", "i2c_start_test.gtkw"):
             sim.run()
-        results = toggle_cov.get_results()
-        print("=== Toggle Coverage Report ===")
-
-        for signal_name, bit_toggles in results.items():
-            print(f"{signal_name}:")
-            for bit, counts in bit_toggles.items():
-                zero_to_one = counts[ToggleDirection.ZERO_TO_ONE]
-                one_to_zero = counts[ToggleDirection.ONE_TO_ZERO]
-                print(f"  Bit {bit}: 0→1={zero_to_one}, 1→0={one_to_zero}")
+        # results = toggle_cov.get_results()
+        # toggle_cov.close(0)
+        results = statement_cov.get_results()
+        statement_cov.close(0)
 
     def test_write(self):
         dut = _I2CHarness()
