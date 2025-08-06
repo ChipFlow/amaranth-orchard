@@ -66,11 +66,12 @@ class ToggleCoverageObserver(Observer):
 
 
 
+
 class StatementCoverageObserver(Observer):
-    def __init__(self, coverage_signal_map, state, stmtid_to_info=None, **kwargs):
+    def __init__(self, coverage_signal_map, state, stmtid_to_name=None, **kwargs):
         self.coverage_signal_map = coverage_signal_map
         self.state = state
-        self.stmtid_to_info = stmtid_to_info or {}
+        self.stmtid_to_name = stmtid_to_name or {}
         self._statement_hits = {}
         super().__init__(**kwargs)
 
@@ -88,8 +89,6 @@ class StatementCoverageObserver(Observer):
 
     def close(self, timestamp):
         print("=== Statement Coverage Report ===")
-        for stmt_id, (name, typ) in sorted(self.stmtid_to_info.items()):
-            if "chipflow_digital_ip" not in name:
-                continue
+        for stmt_id, name in sorted(self.stmtid_to_name.items()):
             count = self._statement_hits.get(stmt_id, 0)
-            print(f"{name}: {typ}: {'HIT' if count > 0 else 'MISS'} ({count} times)")
+            print(f"{name}: {'HIT' if count > 0 else 'MISS'} ({count} times)")

@@ -59,9 +59,26 @@ class TestI2CPeripheral(unittest.TestCase):
     def test_start_stop(self):
         """Test I2C start and stop conditions"""
         dut = _I2CHarness()
+        # mod = dut.elaborate(platform=None)
+        # fragment = Fragment.get(mod, platform=None)
+        # _, stmtid_to_info = tag_all_statements(fragment)
+        # coverage_signals = insert_coverage_signals(fragment) 
+        # signal_to_stmtid = { id(sig): stmt_id for stmt_id, sig in coverage_signals.items() }
+
+        # stmtid_to_name = {}
+        # for domain, stmts in fragment.statements.items():
+        #     for stmt in stmts:
+        #         if hasattr(stmt, "_coverage_id") and hasattr(stmt, "_coverage_name"):
+        #             stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
+
+        # sim = Simulator(fragment)
+        # statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_info=stmtid_to_info)
+        # sim._engine.add_observer(statement_cov)
+
+
         mod = dut.elaborate(platform=None)
         fragment = Fragment.get(mod, platform=None)
-        _, stmtid_to_info = tag_all_statements(fragment)
+        tag_assign_statements(fragment)
         coverage_signals = insert_coverage_signals(fragment) 
         signal_to_stmtid = { id(sig): stmt_id for stmt_id, sig in coverage_signals.items() }
 
@@ -72,9 +89,9 @@ class TestI2CPeripheral(unittest.TestCase):
                     stmtid_to_name[stmt._coverage_id] = stmt._coverage_name
 
         sim = Simulator(fragment)
-        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_info=stmtid_to_info)
+        statement_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_name=stmtid_to_name)
         sim._engine.add_observer(statement_cov)
-
+        
         async def testbench(ctx):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
             await ctx.tick()
