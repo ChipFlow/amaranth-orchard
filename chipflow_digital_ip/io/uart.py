@@ -130,6 +130,8 @@ class UARTPeripheral(wiring.Component):
 
     """Wrapper for amaranth_soc RFC UART with PHY and chipflow_lib.IOSignature support
 
+    See rfc_uart.py for detailed register documentation.
+
     Parameters
     ----------
     addr_width : :class:`int`

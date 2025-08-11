@@ -53,20 +53,84 @@ class _RawTxDataField(csr.FieldAction):
         return m
 
 class WishboneQSPIFlashController(wiring.Component):
+    """
+    A memory-mapped, XIP-capable controller for SPI, DSPI and QSPI flash memory modes.
+
+    The controller starts off in XIP, simple SPI mode, for maximum flash compatibility
+    before configuration to support cases where the processor reset vector is directly
+    in SPI flash.
+
+    As many flash memories require commands to enable quad modes or perform other
+    configuration, a raw mode is also supported enabling custom byte-wise SPI
+    transfers. This mode could also be used to reprogram the SPI flash.
+
+    As the Wishbone interface is disabled in raw mode, it is important that any code
+    performing raw accesses is running in memory outside of the SPI flash (e.g. copied
+    to SRAM).
+    """
 
     class Config(csr.Register, access="rw"):
+        """Config register.
+
+        This :class:`Register` is written to in order to configure the SPI mode and transaction.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "raw_enable", "bits": 1, "attr": "RW" },
+                    { "name": "width", "bits": 2, "attr": "RW" },
+                    { "name": "dummy_bytes", "bits": 2, "attr": "RW" },
+                ]
+
+        - The ``raw_enable`` field is used to perform raw SPI accesses. The Wishbone bus is disabled in this mode.
+        - The ``width`` field configures the SPI access mode:
+            - ``0b00``: X1 IO, standard read (`0x03` command)
+            - ``0b01``: X1 IO, fast read (`0x0B` command)
+            - ``0b10``: X2 IO, fast read (`0xBB` command)
+            - ``0b11``: X4 IO, fast read (`0xEB` command)
+        - The ``dummy_bytes`` field configures the number of dummy bytes between outputing the address and reading back data.
+        """
         raw_enable:   csr.Field(csr.action.RW, 1)
         width:        csr.Field(csr.action.RW, QSPIFlashWidth)
         dummy_bytes:  csr.Field(csr.action.RW, 2)
 
     class RawControl(csr.Register, access="rw"):
+        """Raw control register.
+
+        This :class:`Register` is used to control accesses in raw mode.
+
+        It has the following fields:
+
+        .. bitfield::
+            :bits: 8
+
+                [
+                    { "name": "ready", "bits": 1, "attr": "R" },
+                    { "name": "deselect", "bits": 1, "attr": "W" },
+                    { "name": "dummy_bytes", "bits": 2, "attr": "RW" },
+                ]
+
+        - The ``ready`` field is ``0b1`` when the core is ready to perform a raw mode transfer.
+        - Writing ``0b1`` to the ``deselect`` field will deselect the SPI bus (CS high), used at the end of a command.
+        """
         ready: csr.Field(csr.action.R, 1)
         deselect: csr.Field(csr.action.W, 1)
 
     class RawTxData(csr.Register, access="rw"):
+        """Transmit data register.
+
+        Writing a byte this :class:`Register` starts a 1-byte read/write transfer on the SPI bus in raw mode.
+        """
         data: csr.Field(_RawTxDataField, 8)
 
     class RawRxData(csr.Register, access="rw"):
+        """Receive data register.
+
+        This data contains the result of the last byte transfer in raw mode, which was started with a write to ``RawTxData``.
+        """
         data: csr.Field(csr.action.R, 8)
 
 
