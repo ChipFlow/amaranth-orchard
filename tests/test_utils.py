@@ -5,6 +5,9 @@ from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from amaranth.sim._coverage import StatementCoverageObserver
 from chipflow_digital_ip.io import GPIOPeripheral
 import re
+from collections import Counter
+AGG_STMT_HITS = Counter()
+AGG_STMT_INFO = {} 
 
 def collect_all_signals(obj):
     signals = []
@@ -185,3 +188,49 @@ def insert_coverage_signals(fragment):
                 walk_fragment(subfrag)
     walk_fragment(fragment)
     return coverage_signals
+
+def mk_sim_with_stmtcov(dut, verbose=False):
+    mod = dut.elaborate(platform=None)
+    fragment = Fragment.get(mod, platform=None)
+    _, stmtid_to_info = tag_all_statements(fragment)
+    coverage_signals = insert_coverage_signals(fragment)
+    signal_to_stmtid = {id(sig): stmt_id for stmt_id, sig in coverage_signals.items()}
+    sim = Simulator(fragment)
+    stmt_cov = StatementCoverageObserver(signal_to_stmtid, sim._engine.state, stmtid_to_info=stmtid_to_info)
+    sim._engine.add_observer(stmt_cov)
+    if verbose:
+        total_stmts = len(stmtid_to_info)
+        print(f"[mk_sim_with_stmtcov] Instrumented {total_stmts} statements for coverage.")
+    return sim, stmt_cov, stmtid_to_info, fragment
+
+def merge_stmtcov(results, stmtid_to_info):
+    for sid, info in stmtid_to_info.items():
+        if sid not in AGG_STMT_INFO:
+            AGG_STMT_INFO[sid] = info
+    for sid, hits in results.items():
+        AGG_STMT_HITS[sid] += hits
+
+def emit_agg_summary(json_path="i2c_statement_cov.json", label="test_i2c.py"):
+    """Print & (optionally) write a JSON report of aggregated coverage."""
+    total = len(AGG_STMT_INFO)
+    hit = sum(1 for sid in AGG_STMT_INFO if AGG_STMT_HITS.get(sid, 0) > 0)
+    pct = 100.0 if total == 0 else (hit / total) * 100.0
+    print(f"\n[Statement coverage for {label}] {hit}/{total} = {pct:.1f}%")
+
+    # optional JSON
+    try:
+        import json
+        report = []
+        for sid, (name, typ) in AGG_STMT_INFO.items():
+            report.append({
+                "id": str(sid),
+                "name": name,
+                "type": typ,
+                "hits": int(AGG_STMT_HITS.get(sid, 0)),
+            })
+        with open(json_path, "w") as f:
+            json.dump({"summary": {"hit": hit, "total": total, "percent": pct},
+                       "statements": report}, f, indent=2)
+        print(f"Wrote {json_path}")
+    except Exception as e:
+        print(f"(could not write JSON report: {e})")
