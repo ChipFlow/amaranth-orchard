@@ -2,13 +2,13 @@ import unittest
 from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
-from amaranth.sim._coverage import StatementCoverageObserver
+from amaranth.sim._coverage import *
 from chipflow_digital_ip.io import GPIOPeripheral
 import re
 from collections import Counter
-AGG_STMT_HITS = Counter()
-AGG_STMT_INFO = {} 
 
+
+##### TOGGLE COVERAGE #####
 def collect_all_signals(obj):
     signals = []
     def _collect(o):
@@ -32,7 +32,6 @@ def collect_all_signals(obj):
     _collect(obj)
     return signals
 
-    
 def get_signal_full_paths(design):
     signal_path_map = {}
     for fragment, fragment_info in design.fragments.items():
@@ -43,6 +42,9 @@ def get_signal_full_paths(design):
     return signal_path_map
 
 
+##### STATEMENT COVERAGE #####
+AGG_STMT_HITS = Counter()
+AGG_STMT_INFO = {} 
 
 def get_assign_name(domain, stmt):
     def expr_name(expr):
@@ -74,7 +76,6 @@ def get_assign_name(domain, stmt):
     rhs = expr_name(stmt.rhs)
     return f"{loc_str} | {domain}:{lhs} = {rhs}"
 
-
 def get_switch_case_name(domain, switch_stmt, patterns, src_loc=None):
     if src_loc is None:
         src_loc = getattr(switch_stmt, "src_loc", None)
@@ -95,7 +96,6 @@ def get_switch_case_name(domain, switch_stmt, patterns, src_loc=None):
         path_str = "top"
     patterns_str = "default" if patterns is None else str(patterns)
     return f"{loc_str} | {path_str} | {domain}:switch_case({patterns_str})"
-
 
 def tag_all_statements(fragment, coverage_id=0, parent_path=(), stmtid_to_info=None):
     from amaranth.hdl._ast import Assign, Switch
@@ -139,7 +139,6 @@ def tag_all_statements(fragment, coverage_id=0, parent_path=(), stmtid_to_info=N
                 subfragment, coverage_id, parent_path + (name,), stmtid_to_info
             )
     return coverage_id, stmtid_to_info
-
 
 def insert_coverage_signals(fragment):
     from amaranth.hdl._ast import Assign, Const, Signal, Switch as AstSwitch
@@ -211,13 +210,24 @@ def merge_stmtcov(results, stmtid_to_info):
         AGG_STMT_HITS[sid] += hits
 
 def emit_agg_summary(json_path="i2c_statement_cov.json", label="test_i2c.py"):
-    """Print & (optionally) write a JSON report of aggregated coverage."""
     total = len(AGG_STMT_INFO)
     hit = sum(1 for sid in AGG_STMT_INFO if AGG_STMT_HITS.get(sid, 0) > 0)
     pct = 100.0 if total == 0 else (hit / total) * 100.0
     print(f"\n[Statement coverage for {label}] {hit}/{total} = {pct:.1f}%")
-
-    # optional JSON
+    # items = []
+    # for sid, (name, typ) in AGG_STMT_INFO.items():
+    #     items.append((sid, name, typ, int(AGG_STMT_HITS.get(sid, 0))))
+    # items.sort(key=lambda x: x[1])  # sort by name
+    #
+    # print("\nStatements HIT:")
+    # for _, name, _, h in items:
+    #     if h > 0:
+    #         print(f"  {name} ({h} hits)")
+    #
+    # print("\nStatements NOT hit:")
+    # for _, name, _, h in items:
+    #     if h == 0:
+    #         print(f"  {name}")
     try:
         import json
         report = []
@@ -232,5 +242,174 @@ def emit_agg_summary(json_path="i2c_statement_cov.json", label="test_i2c.py"):
             json.dump({"summary": {"hit": hit, "total": total, "percent": pct},
                        "statements": report}, f, indent=2)
         print(f"Wrote {json_path}")
+    except Exception as e:
+        print(f"(could not write JSON report: {e})")
+
+
+##### BRANCH COVERAGE #####
+AGG_BLOCK_HITS = Counter()
+AGG_BLOCK_INFO = {}
+
+def get_block_name(domain, parent_path, tag, src_loc=None):
+    if parent_path:
+        safe_parts = [("anon" if (p is None or p == "") else str(p)) for p in parent_path]
+        path_str = "/".join(safe_parts)
+    else:
+        path_str = "top"
+    if src_loc:
+        filename, lineno = src_loc[0], src_loc[1]
+        anchor = "chipflow-digital-ip"
+        idx = filename.find(anchor)
+        filename = filename[idx:] if idx != -1 else filename.split("/")[-1]
+        loc_str = f"{filename}:{lineno}"
+    else:
+        loc_str = "unknown"
+    return f"{loc_str} | {path_str} | {domain}:block({tag})"
+
+def tag_all_blocks(fragment, coverage_id=0, parent_path=(), blockid_to_info=None):
+    from amaranth.hdl._ast import Switch
+    if blockid_to_info is None:
+        blockid_to_info = {}
+    if not hasattr(fragment, "_block_cov_ids"):
+        fragment._block_cov_ids = []
+    for domain, stmts in getattr(fragment, "statements", {}).items():
+        first_src = getattr(stmts, "0", None)
+        first_src = getattr(stmts[0], "src_loc", None) if stmts else None
+        blk_id = (parent_path, domain, coverage_id)
+        blk_name = get_block_name(domain, parent_path, "root", src_loc=first_src)
+        blockid_to_info[blk_id] = (blk_name, "block")
+        fragment._block_cov_ids.append((id(stmts), blk_id))
+        coverage_id += 1
+    for domain, stmts in getattr(fragment, "statements", {}).items():
+        for stmt in stmts:
+            if isinstance(stmt, Switch):
+                for patterns, sub_stmts, case_src_loc in stmt.cases:
+                    blk_id = (parent_path, domain, coverage_id)
+                    pat_str = "default" if patterns is None else str(patterns)
+                    blk_name = get_block_name(domain, parent_path, f"case:{pat_str}", src_loc=case_src_loc)
+                    blockid_to_info[blk_id] = (blk_name, "block")
+                    if not hasattr(stmt, "_block_cov_ids"):
+                        stmt._block_cov_ids = []
+                    stmt._block_cov_ids.append((id(sub_stmts), blk_id))
+                    coverage_id += 1
+    for subfragment, name, _src_loc in getattr(fragment, "subfragments", []):
+        if hasattr(subfragment, "statements"):
+            coverage_id, blockid_to_info = tag_all_blocks(
+                subfragment, coverage_id, parent_path + (name,), blockid_to_info
+            )
+    return coverage_id, blockid_to_info
+
+def insert_block_coverage_signals(fragment, blockid_to_info):
+    from amaranth.hdl._ast import Assign, Const, Signal, Switch as AstSwitch
+    from amaranth.hdl._ir import Fragment as AmaranthFragment
+    coverage_signals = {}
+    listid_to_blockid = {}
+    def cov_name(cov_id):
+        parent_path, domain, serial = cov_id
+        path = "_".join("anon" if p is None else str(p) for p in parent_path) if parent_path else "top"
+        return f"blk_{path}_{domain}_{serial}"
+    def harvest_block_ids(frag):
+        if hasattr(frag, "_block_cov_ids"):
+            for list_id, blk_id in frag._block_cov_ids:
+                listid_to_blockid[list_id] = blk_id
+        for domain, stmts in getattr(frag, "statements", {}).items():
+            for stmt in stmts:
+                if isinstance(stmt, AstSwitch) and hasattr(stmt, "_block_cov_ids"):
+                    for list_id, blk_id in stmt._block_cov_ids:
+                        listid_to_blockid[list_id] = blk_id
+        for subfrag, _name, _sloc in getattr(frag, "subfragments", []):
+            if hasattr(subfrag, "statements"):
+                harvest_block_ids(subfrag)
+    harvest_block_ids(fragment)
+    def inject_head(stmts, blk_id):
+        if blk_id is None:
+            return
+        sig = coverage_signals.get(blk_id)
+        if sig is None:
+            sig = Signal(name=cov_name(blk_id), init=0)
+            coverage_signals[blk_id] = sig
+        stmts[:0] = [Assign(sig, Const(1))]
+    def walk_fragment(frag):
+        if not isinstance(frag, AmaranthFragment):
+            return
+        for domain, stmts in list(frag.statements.items()):
+            inject_head(stmts, listid_to_blockid.get(id(stmts)))
+            for stmt in stmts:
+                if isinstance(stmt, AstSwitch):
+                    for _patterns, sub_stmts, _case_src_loc in stmt.cases:
+                        inject_head(sub_stmts, listid_to_blockid.get(id(sub_stmts)))
+        for subfrag, _name, _sloc in getattr(frag, "subfragments", []):
+            if hasattr(subfrag, "statements"):
+                walk_fragment(subfrag)
+    walk_fragment(fragment)
+    return coverage_signals
+
+def mk_sim_with_blockcov(dut, verbose=False):
+    mod = dut.elaborate(platform=None)
+    fragment = Fragment.get(mod, platform=None)
+    _, blockid_to_info = tag_all_blocks(fragment)
+    coverage_signals = insert_block_coverage_signals(fragment, blockid_to_info)
+    signal_to_blockid = {id(sig): blk_id for blk_id, sig in coverage_signals.items()}
+    sim = Simulator(fragment)
+    blk_cov = BlockCoverageObserver(signal_to_blockid, sim._engine.state, blockid_to_info=blockid_to_info)
+    sim._engine.add_observer(blk_cov)
+    if verbose:
+        total_blocks = len(blockid_to_info)
+        print(f"[mk_sim_with_blockcov] Instrumented {total_blocks} blocks for coverage.")
+    return sim, blk_cov, blockid_to_info, fragment
+
+def merge_blockcov(results, blockid_to_info):
+    for bid, info in blockid_to_info.items():
+        if bid not in AGG_BLOCK_INFO:
+            AGG_BLOCK_INFO[bid] = info
+    for bid, hits in results.items():
+        AGG_BLOCK_HITS[bid] += hits
+        
+def emit_agg_block_summary(json_path="i2c_block_cov.json", label="test_i2c.py",
+                           show_hits=True, show_misses=True, max_print=None, sort_by="name"):
+    total = len(AGG_BLOCK_INFO)
+    hit = sum(1 for bid in AGG_BLOCK_INFO if AGG_BLOCK_HITS.get(bid, 0) > 0)
+    pct = 100.0 if total == 0 else (hit / total) * 100.0
+    print(f"\n[Block coverage for {label}] {hit}/{total} = {pct:.1f}%")
+
+    # items = []
+    # for bid, (name, typ) in AGG_BLOCK_INFO.items():
+    #     items.append((bid, name, typ, int(AGG_BLOCK_HITS.get(bid, 0))))
+
+    # if sort_by == "hits":
+    #     items.sort(key=lambda x: (x[3], x[1]))
+    # else:
+    #     items.sort(key=lambda x: x[1])
+
+    # if show_hits:
+    #     hits_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h > 0]
+    #     if max_print is not None:
+    #         hits_list = hits_list[:max_print]
+    #     print("\nBlocks HIT:")
+    #     for _, name, _, h in hits_list:
+    #         print(f"  {name} ({h} hits)")
+
+    # if show_misses:
+    #     miss_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h == 0]
+    #     if max_print is not None:
+    #         miss_list = miss_list[:max_print]
+    #     print("\nBlocks NOT hit:")
+    #     for _, name, _, _ in miss_list:
+    #         print(f"  {name}")
+
+    try:
+        import json
+        report = []
+        for bid, (name, typ) in AGG_BLOCK_INFO.items():
+            report.append({
+                "id": str(bid),
+                "name": name,
+                "type": typ,
+                "hits": int(AGG_BLOCK_HITS.get(bid, 0)),
+            })
+        with open(json_path, "w") as f:
+            json.dump({"summary": {"hit": hit, "total": total, "percent": pct},
+                       "blocks": report}, f, indent=2)
+        print(f"\nWrote {json_path}")
     except Exception as e:
         print(f"(could not write JSON report: {e})")

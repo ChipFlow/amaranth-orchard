@@ -87,9 +87,29 @@ class StatementCoverageObserver(Observer):
         return self._statement_hits
 
     def close(self, timestamp):
-        print("=== Statement Coverage Report ===")
-        for stmt_id, (name, typ) in sorted(self.stmtid_to_info.items()):
-            if "chipflow_digital_ip" not in name:
-                continue
-            count = self._statement_hits.get(stmt_id, 0)
-            print(f"{name}: {typ}: {'HIT' if count > 0 else 'MISS'} ({count} times)")
+        pass
+
+
+
+class BlockCoverageObserver(Observer):
+    def __init__(self, coverage_signal_map, state, blockid_to_info=None, **kwargs):
+        self.coverage_signal_map = coverage_signal_map
+        self.state = state
+        self.blockid_to_info = blockid_to_info or {}
+        self._block_hits = {}
+        super().__init__(**kwargs)
+
+    def update_signal(self, timestamp, signal):
+        sig_id = id(signal)
+        if sig_id in self.coverage_signal_map:
+            block_id = self.coverage_signal_map[sig_id]
+            self._block_hits[block_id] = self._block_hits.get(block_id, 0) + 1
+
+    def update_memory(self, timestamp, memory, addr):
+        pass
+
+    def get_results(self):
+        return self._block_hits
+
+    def close(self, timestamp):
+        pass

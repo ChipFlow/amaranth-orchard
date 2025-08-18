@@ -58,7 +58,8 @@ class TestI2CPeripheral(unittest.TestCase):
     def test_start_stop(self):
         """Test I2C start and stop conditions"""
         dut = _I2CHarness()
-        sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        # sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        sim, blk_cov, blk_info, _ = mk_sim_with_blockcov(dut, verbose=True)
 
         async def testbench(ctx):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
@@ -87,13 +88,16 @@ class TestI2CPeripheral(unittest.TestCase):
         with sim.write_vcd("i2c_start_test.vcd", "i2c_start_test.gtkw"):
             sim.run()
 
-        results = statement_cov.get_results()
-        statement_cov.close(0)
-        merge_stmtcov(results, stmtid_to_info)
+        # results = statement_cov.get_results()
+        # statement_cov.close(0)
+        # merge_stmtcov(results, stmtid_to_info)
+        results = blk_cov.get_results()
+        merge_blockcov(results, blk_info)
 
     def test_write(self):
         dut = _I2CHarness()
-        sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        # sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        sim, blk_cov, blk_info, _ = mk_sim_with_blockcov(dut, verbose=True)
 
         async def testbench(ctx):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
@@ -127,13 +131,17 @@ class TestI2CPeripheral(unittest.TestCase):
         with sim.write_vcd("i2c_write_test.vcd", "i2c_write_test.gtkw"):
             sim.run()
 
-        results = statement_cov.get_results()
-        statement_cov.close(0)
-        merge_stmtcov(results, stmtid_to_info)
+        # results = statement_cov.get_results()
+        # statement_cov.close(0)
+        # merge_stmtcov(results, stmtid_to_info)
+        results = blk_cov.get_results()
+        merge_blockcov(results, blk_info)
 
     def test_read(self):
         dut = _I2CHarness()
-        sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        # sim, statement_cov, stmtid_to_info, fragment = mk_sim_with_stmtcov(dut)
+        sim, blk_cov, blk_info, _ = mk_sim_with_blockcov(dut, verbose=True)
+
         data = 0xA3
         async def testbench(ctx):
             await self._write_reg(ctx, dut.i2c, self.REG_DIVIDER, 1, 4)
@@ -168,10 +176,18 @@ class TestI2CPeripheral(unittest.TestCase):
         sim.add_testbench(testbench)
         with sim.write_vcd("i2c_read_test.vcd", "i2c_read_test.gtkw"):
             sim.run()
-        results = statement_cov.get_results()
-        statement_cov.close(0)
-        merge_stmtcov(results, stmtid_to_info)
+        # results = statement_cov.get_results()
+        # statement_cov.close(0)
+        # merge_stmtcov(results, stmtid_to_info)
+        results = blk_cov.get_results()
+        merge_blockcov(results, blk_info)
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     emit_agg_summary("i2c_statement_cov.json", label="tests/test_i2c.py")
+
 
     @classmethod
     def tearDownClass(cls):
-        emit_agg_summary("i2c_statement_cov.json", label="tests/test_i2c.py")
+        emit_agg_block_summary("i2c_block_cov.json", label=__name__)
+
