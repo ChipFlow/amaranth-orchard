@@ -14,6 +14,7 @@ SPISignature = wiring.Signature({
     "csn": Out(OutputIOSignature(1)),
 })
 
+
 class SPIController(wiring.Component):
     def __init__(self):
         super().__init__({
@@ -141,10 +142,10 @@ class SPIPeripheral(wiring.Component):
         """recv_full is 1 when transfer has been completed. reset to zero by reading receive_data"""
         recv_full: csr.Field(csr.action.R, unsigned(1))
 
-
     """
     A custom, minimal SPI controller
     """
+
     def __init__(self):
         regs = csr.Builder(addr_width=5, data_width=8)
 
