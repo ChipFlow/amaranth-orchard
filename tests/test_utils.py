@@ -1,7 +1,6 @@
 import unittest
 from amaranth import *
 from amaranth.sim import *
-from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection
 from amaranth.sim._coverage import *
 from chipflow_digital_ip.io import GPIOPeripheral
 import re
@@ -246,7 +245,7 @@ def emit_agg_summary(json_path="i2c_statement_cov.json", label="test_i2c.py"):
         print(f"(could not write JSON report: {e})")
 
 
-##### BRANCH COVERAGE #####
+##### BLOCK COVERAGE #####
 AGG_BLOCK_HITS = Counter()
 AGG_BLOCK_INFO = {}
 
@@ -372,30 +371,30 @@ def emit_agg_block_summary(json_path="i2c_block_cov.json", label="test_i2c.py",
     pct = 100.0 if total == 0 else (hit / total) * 100.0
     print(f"\n[Block coverage for {label}] {hit}/{total} = {pct:.1f}%")
 
-    # items = []
-    # for bid, (name, typ) in AGG_BLOCK_INFO.items():
-    #     items.append((bid, name, typ, int(AGG_BLOCK_HITS.get(bid, 0))))
+    items = []
+    for bid, (name, typ) in AGG_BLOCK_INFO.items():
+        items.append((bid, name, typ, int(AGG_BLOCK_HITS.get(bid, 0))))
 
-    # if sort_by == "hits":
-    #     items.sort(key=lambda x: (x[3], x[1]))
-    # else:
-    #     items.sort(key=lambda x: x[1])
+    if sort_by == "hits":
+        items.sort(key=lambda x: (x[3], x[1]))
+    else:
+        items.sort(key=lambda x: x[1])
 
-    # if show_hits:
-    #     hits_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h > 0]
-    #     if max_print is not None:
-    #         hits_list = hits_list[:max_print]
-    #     print("\nBlocks HIT:")
-    #     for _, name, _, h in hits_list:
-    #         print(f"  {name} ({h} hits)")
+    if show_hits:
+        hits_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h > 0]
+        if max_print is not None:
+            hits_list = hits_list[:max_print]
+        print("\nBlocks HIT:")
+        for _, name, _, h in hits_list:
+            print(f"  {name} ({h} hits)")
 
-    # if show_misses:
-    #     miss_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h == 0]
-    #     if max_print is not None:
-    #         miss_list = miss_list[:max_print]
-    #     print("\nBlocks NOT hit:")
-    #     for _, name, _, _ in miss_list:
-    #         print(f"  {name}")
+    if show_misses:
+        miss_list = [(bid, name, typ, h) for (bid, name, typ, h) in items if h == 0]
+        if max_print is not None:
+            miss_list = miss_list[:max_print]
+        print("\nBlocks NOT hit:")
+        for _, name, _, _ in miss_list:
+            print(f"  {name}")
 
     try:
         import json
@@ -411,5 +410,241 @@ def emit_agg_block_summary(json_path="i2c_block_cov.json", label="test_i2c.py",
             json.dump({"summary": {"hit": hit, "total": total, "percent": pct},
                        "blocks": report}, f, indent=2)
         print(f"\nWrote {json_path}")
+    except Exception as e:
+        print(f"(could not write JSON report: {e})")
+
+
+##### EXPRESSION COVERAGE #####
+from functools import reduce
+from operator import or_ as _bor
+
+AGG_EXPR_HITS = Counter()
+AGG_EXPR_INFO = {}
+
+def _is_bool_width(expr):
+    try:
+        w = int(expr.shape().width)
+        return w == 1
+    except Exception:
+        return False
+
+def _expr_str(expr):
+    if hasattr(expr, "name") and expr.name is not None:
+        return expr.name
+    try:
+        return str(expr)
+    except Exception:
+        return f"<expr@{id(expr):x}>"
+
+def _src_loc_str(node):
+    src_loc = getattr(node, "src_loc", None)
+    if not src_loc:
+        return "unknown"
+    filename, lineno = src_loc[0], src_loc[1]
+    anchor = "chipflow-digital-ip"
+    idx = filename.find(anchor)
+    filename = filename[idx:] if idx != -1 else filename.split("/")[-1]
+    return f"{filename}:{lineno}"
+
+def _cov_name_for_expr(cov_id, domain, parent_path, suffix):
+    if parent_path:
+        path = "_".join("anon" if p is None else str(p) for p in parent_path)
+    else:
+        path = "top"
+    return f"cov_{path}_{domain}_expr_{suffix}_{cov_id}"
+
+def _iter_boolean_subexpressions_from_assign(stmt):
+    stack = [stmt.rhs]
+    seen = set()
+    while stack:
+        e = stack.pop()
+        if id(e) in seen:
+            continue
+        seen.add(id(e))
+        if _is_bool_width(e):
+            yield e
+        for attr in ("operands", "value", "test", "cases", "choices"):
+            sub = getattr(e, attr, None)
+            if sub is None:
+                continue
+            if isinstance(sub, (list, tuple)):
+                for s in sub:
+                    if s is not None:
+                        stack.append(s)
+            else:
+                stack.append(sub)
+def _boolean_exprs_from_switch(switch_stmt):
+    from amaranth.hdl._ast import Const as _AstConst, Pattern as _AstPattern
+    test = switch_stmt.test
+    if test is None:
+        return []
+    bool_exprs = []
+    any_match = None
+    for patterns, _sub_stmts, _case_src_loc in switch_stmt.cases:
+        if patterns is None:
+            continue
+        pats = patterns if isinstance(patterns, (list, tuple)) else (patterns,)
+        eqs = []
+        for p in pats:
+            if isinstance(p, _AstPattern):
+                eqs.append(p.matches(test))
+            elif isinstance(p, _AstConst):
+                eqs.append(test == p)
+            else:
+                try:
+                    eqs.append(test == Const(int(p), shape=test.shape()))
+                except Exception:
+                    eqs.append(test == Const(p))
+        expr_case = reduce(_bor, eqs) if len(eqs) > 1 else eqs[0]
+        bool_exprs.append(("case", expr_case, patterns))
+        any_match = expr_case if any_match is None else (any_match | expr_case)
+    if any_match is not None:
+        bool_exprs.append(("default", ~any_match, None))
+    return bool_exprs
+
+def tag_all_expressions(fragment, coverage_id=0, parent_path=(), exprid_to_info=None):
+    from amaranth.hdl._ast import Assign as _AstAssign, Switch as _AstSwitch
+    if exprid_to_info is None:
+        exprid_to_info = {}
+    if not hasattr(fragment, "statements"):
+        return coverage_id, exprid_to_info
+    for domain, stmts in fragment.statements.items():
+        for stmt in stmts:
+            if isinstance(stmt, _AstAssign):
+                src = _src_loc_str(stmt)
+                for e in _iter_boolean_subexpressions_from_assign(stmt):
+                    if hasattr(e, "_expr_coverage_id"):
+                        continue
+                    expr_name = f"{src} | {domain}:expr({_expr_str(e)})"
+                    e._expr_coverage_id = (parent_path, domain, coverage_id)
+                    e._expr_coverage_name = expr_name
+                    exprid_to_info[e._expr_coverage_id] = (expr_name, "expr")
+                    coverage_id += 1
+            elif isinstance(stmt, _AstSwitch):
+                src = _src_loc_str(stmt)
+                for role, e, patterns in _boolean_exprs_from_switch(stmt):
+                    if hasattr(e, "_expr_coverage_id"):
+                        continue
+                    patt_str = "default" if patterns is None else str(patterns)
+                    expr_name = f"{src} | {domain}:switch_{role}({patt_str})"
+                    e._expr_coverage_id = (parent_path, domain, coverage_id)
+                    e._expr_coverage_name = expr_name
+                    exprid_to_info[e._expr_coverage_id] = (expr_name, "expr")
+                    coverage_id += 1
+    for subfragment, name, _src_loc in getattr(fragment, "subfragments", []):
+        if hasattr(subfragment, "statements"):
+            coverage_id, exprid_to_info = tag_all_expressions(
+                subfragment, coverage_id, parent_path + (name,), exprid_to_info
+            )
+    return coverage_id, exprid_to_info
+
+def insert_expression_coverage_signals(fragment):
+    from amaranth.hdl._ast import Assign as _AstAssign, Switch as _AstSwitch
+    from amaranth.hdl._ir import Fragment as _AmaranthFragment
+    coverage_signals = {}
+    def _inject_in_stmt_list(domain, stmts, parent_path):
+        new_list = []
+        for stmt in stmts:
+            if isinstance(stmt, _AstAssign):
+                tagged = list(_iter_boolean_subexpressions_from_assign(stmt))
+                for e in tagged:
+                    if not hasattr(e, "_expr_coverage_id"):
+                        continue
+                    cov_id = e._expr_coverage_id
+                    t_sig = coverage_signals.get((cov_id, "T"))
+                    if t_sig is None:
+                        t_sig = Signal(name=_cov_name_for_expr(cov_id[2], cov_id[1], cov_id[0], "T"), init=0)
+                        coverage_signals[(cov_id, "T")] = t_sig
+                    f_sig = coverage_signals.get((cov_id, "F"))
+                    if f_sig is None:
+                        f_sig = Signal(name=_cov_name_for_expr(cov_id[2], cov_id[1], cov_id[0], "F"), init=0)
+                        coverage_signals[(cov_id, "F")] = f_sig
+                    new_list.append(_AstAssign(t_sig, e))
+                    new_list.append(_AstAssign(f_sig, ~e))
+                new_list.append(stmt)
+            elif isinstance(stmt, _AstSwitch):
+                for role, e, _patterns in _boolean_exprs_from_switch(stmt):
+                    if not hasattr(e, "_expr_coverage_id"):
+                        continue
+                    cov_id = e._expr_coverage_id
+                    t_sig = coverage_signals.get((cov_id, "T"))
+                    if t_sig is None:
+                        t_sig = Signal(name=_cov_name_for_expr(cov_id[2], cov_id[1], cov_id[0], "T"), init=0)
+                        coverage_signals[(cov_id, "T")] = t_sig
+                    f_sig = coverage_signals.get((cov_id, "F"))
+                    if f_sig is None:
+                        f_sig = Signal(name=_cov_name_for_expr(cov_id[2], cov_id[1], cov_id[0], "F"), init=0)
+                        coverage_signals[(cov_id, "F")] = f_sig
+                    new_list.append(_AstAssign(t_sig, e))
+                    new_list.append(_AstAssign(f_sig, ~e))
+                if hasattr(stmt, "cases"):
+                    for idx, (patterns, sub_stmts, case_src_loc) in enumerate(stmt.cases):
+                        instrumented = _inject_in_stmt_list(domain, list(sub_stmts), parent_path)
+                        sub_stmts[:] = instrumented
+                new_list.append(stmt)
+            else:
+                new_list.append(stmt)
+        return new_list
+    def _walk_fragment(frag, parent_path):
+        if not isinstance(frag, _AmaranthFragment):
+            return
+        for domain, stmts in list(frag.statements.items()):
+            frag.statements[domain] = _inject_in_stmt_list(domain, list(stmts), parent_path)
+        for subfrag, name, _sloc in getattr(frag, "subfragments", []):
+            if hasattr(subfrag, "statements"):
+                _walk_fragment(subfrag, parent_path + (name,))
+    _walk_fragment(fragment, ())
+    return coverage_signals
+
+def mk_sim_with_exprcov(dut, verbose=False):
+    mod = dut.elaborate(platform=None)
+    fragment = Fragment.get(mod, platform=None)
+    _, exprid_to_info = tag_all_expressions(fragment)
+    cov_sigs = insert_expression_coverage_signals(fragment)
+    coverage_signal_map = {}
+    for (expr_cov_id, outcome), sig in cov_sigs.items():
+        coverage_signal_map[id(sig)] = (expr_cov_id, outcome)
+    sim = Simulator(fragment)
+    expr_cov = ExpressionCoverageObserver(coverage_signal_map, sim._engine.state, exprid_to_info=exprid_to_info)
+    sim._engine.add_observer(expr_cov)
+    if verbose:
+        total_exprs = len({eid for (eid, _outcome) in cov_sigs.keys()})
+        print(f"[mk_sim_with_exprcov] Instrumented {total_exprs} boolean sub-expressions ({len(cov_sigs)} signals for T/F).")
+    return sim, expr_cov, exprid_to_info, fragment
+
+def merge_exprcov(results, exprid_to_info):
+    for eid, info in exprid_to_info.items():
+        if eid not in AGG_EXPR_INFO:
+            AGG_EXPR_INFO[eid] = info
+    for eid, tf in results.items():
+        AGG_EXPR_HITS[(eid, "T")] += int(tf.get("T", 0))
+        AGG_EXPR_HITS[(eid, "F")] += int(tf.get("F", 0))
+
+def emit_expr_summary(json_path="i2c_expression_cov.json", label="test_i2c.py"):
+    per_expr = {}
+    for eid, (name, typ) in AGG_EXPR_INFO.items():
+        t = int(AGG_EXPR_HITS.get((eid, "T"), 0))
+        f = int(AGG_EXPR_HITS.get((eid, "F"), 0))
+        per_expr[eid] = (name, typ, t, f)
+    total = len(per_expr)
+    hit = sum(1 for eid, (_name, _typ, t, f) in per_expr.items() if t > 0 and f > 0)
+    pct = 100.0 if total == 0 else (hit / total) * 100.0
+    print(f"\n[Expression coverage for {label}] {hit}/{total} = {pct:.1f}% (requires both TRUE and FALSE)")
+    try:
+        import json
+        report = []
+        for eid, (name, typ, t, f) in per_expr.items():
+            report.append({
+                "id": str(eid),
+                "name": name,
+                "type": "expr",
+                "true_hits": t,
+                "false_hits": f,
+                "covered": bool(t > 0 and f > 0),
+            })
+        with open(json_path, "w") as f:
+            json.dump({"summary": {"hit": hit, "total": total, "percent": pct},
+                       "expressions": report}, f, indent=2)
+        print(f"Wrote {json_path}")
     except Exception as e:
         print(f"(could not write JSON report: {e})")
