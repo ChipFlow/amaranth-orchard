@@ -116,6 +116,35 @@ class BlockCoverageObserver(Observer):
 
 
 
+class AssertionCoverageObserver(Observer):
+    def __init__(self, coverage_signal_map, state, assertid_to_info=None, **kwargs):
+        self.coverage_signal_map = coverage_signal_map
+        self.state = state
+        self.assertid_to_info = assertid_to_info or {}
+        self._assert_hits = {}
+        super().__init__(**kwargs)
+
+    def update_signal(self, timestamp, signal):
+        sig_id = id(signal)
+        if sig_id in self.coverage_signal_map:
+            assert_id, outcome = self.coverage_signal_map[sig_id]
+            bucket = self._assert_hits.get(assert_id)
+            if bucket is None:
+                bucket = {"true": 0, "false": 0, "fail": 0}
+                self._assert_hits[assert_id] = bucket
+            bucket[outcome] = bucket.get(outcome, 0) + 1
+
+    def update_memory(self, timestamp, memory, addr):
+        pass
+
+    def get_results(self):
+        return self._assert_hits
+
+    def close(self, timestamp):
+        pass
+
+
+
 class ExpressionCoverageObserver(Observer):
     def __init__(self, coverage_signal_map, state, exprid_to_info=None, **kwargs):
         self.coverage_signal_map = coverage_signal_map
