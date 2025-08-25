@@ -418,126 +418,133 @@ def emit_agg_block_summary(json_path="i2c_block_cov.json", label="test_i2c.py",
 AGG_ASSERT_HITS = Counter()
 AGG_ASSERT_INFO = {}
 
-def get_assert_name(domain, assert_stmt):
-    src_loc = getattr(assert_stmt, "src_loc", None)
-    if src_loc:
-        filename, lineno = src_loc[0], src_loc[1]
-        anchor = "chipflow-digital-ip"
-        idx = filename.find(anchor)
-        filename = filename[idx:] if idx != -1 else filename.split("/")[-1]
-        loc_str = f"{filename}:{lineno}"
-    else:
-        loc_str = "unknown"
-    def expr_name(expr):
-        if hasattr(expr, "name"):
-            return expr.name
-        if hasattr(expr, "value"):
-            try:
-                return str(expr.value)
-            except Exception:
-                pass
-        return str(expr)
-    test_expr = getattr(assert_stmt, "test", None)
-    test_str = expr_name(test_expr) if test_expr is not None else "<?>"
-    return f"{loc_str} | {domain}:assert({test_str})"
+def _short_loc(src_loc):
+    if not src_loc:
+        return "unknown"
+    filename, lineno = src_loc[0], src_loc[1]
+    anchor = "chipflow-digital-ip"
+    idx = filename.find(anchor)
+    filename = filename[idx:] if idx != -1 else filename.split("/")[-1]
+    return f"{filename}:{lineno}"
 
-def tag_all_assertions(fragment, coverage_id=0, parent_path=(), assertid_to_info=None):
+def _safe_path_str(parent_path):
+    if parent_path:
+        return "/".join(("anon" if (p is None or p == "") else str(p)) for p in parent_path)
+    return "top"
+
+def _expr_name(expr):
+    if hasattr(expr, "value") and hasattr(expr, "start") and hasattr(expr, "stop"):
+        base = _expr_name(expr.value)
+        return f"{base}[{expr.start}]" if expr.start == expr.stop - 1 else f"{base}[{expr.start}:{expr.stop}]"
+    if hasattr(expr, "name"):
+        return expr.name
+    if hasattr(expr, "value"):
+        return str(expr.value)
+    return str(expr)
+
+def get_assert_name(domain, node, parent_path=()):
+    loc = _short_loc(getattr(node, "src_loc", None))
+    typ = getattr(node, "_assert_type", "assert")
+    cond = getattr(node, "cond", None) or getattr(node, "test", None) or getattr(node, "expr", None)
+    cond_s = _expr_name(cond) if cond is not None else "?"
+    return f"{loc} | {_safe_path_str(parent_path)} | {domain}:{typ}({cond_s})"
+
+
+def _assert_node_kind(stmt):
+    n = type(stmt).__name__.lower()
+    if "assert" in n: return "assert"
+    if "assume" in n: return "assume"
+    if "cover"  in n: return "cover"
+    return None
+
+def _is_assert_like(stmt):
+    return _assert_node_kind(stmt) is not None
+
+def tag_all_asserts(fragment, coverage_id=0, parent_path=(), assertid_to_info=None):
+    from amaranth.hdl._ast import Switch
     if assertid_to_info is None:
         assertid_to_info = {}
     if not hasattr(fragment, "statements"):
         return coverage_id, assertid_to_info
-
-    def _is_assert_node(stmt):
-        cname = type(stmt).__name__
-        return hasattr(stmt, "test") and cname.lower().startswith("assert")
-
     for domain, stmts in fragment.statements.items():
         for stmt in stmts:
-            if hasattr(stmt, "_assert_cov_id"):
-                continue
-            if _is_assert_node(stmt):
-                stmt._assert_cov_id = (parent_path, domain, coverage_id)
-                stmt._assert_cov_name = get_assert_name(domain, stmt)
-                stmt._coverage_type = "assert"
-                assertid_to_info[stmt._assert_cov_id] = (stmt._assert_cov_name, "assert")
+            if _is_assert_like(stmt) and not hasattr(stmt, "_assert_id"):
+                stmt._assert_id = (parent_path, domain, coverage_id)
+                stmt._assert_type = _assert_node_kind(stmt) or "assert"
+                stmt._assert_name = get_assert_name(domain, stmt, parent_path)
+                assertid_to_info[stmt._assert_id] = (stmt._assert_name, stmt._assert_type)
                 coverage_id += 1
-            for sub_list_name in ("then_stmts", "else_stmts", "cases"):
-                if hasattr(stmt, sub_list_name):
-                    subobj = getattr(stmt, sub_list_name)
-                    if sub_list_name == "cases":
-                        for _patterns, sub_stmts, _case_src in subobj:
-                            tmp = type("TempFrag", (), {"statements": {domain: list(sub_stmts)}, "subfragments": []})()
-                            coverage_id, assertid_to_info = tag_all_assertions(
-                                tmp, coverage_id, parent_path, assertid_to_info
-                            )
-                    else:
-                        tmp = type("TempFrag", (), {"statements": {domain: list(subobj)}, "subfragments": []})()
-                        coverage_id, assertid_to_info = tag_all_assertions(
+            if isinstance(stmt, Switch):
+                for _patterns, sub_stmts, _case_src in stmt.cases:
+                    for sub_stmt in sub_stmts:
+                        tmp = type("TempFrag", (), {"statements": {domain: [sub_stmt]}, "subfragments": []})()
+                        coverage_id, assertid_to_info = tag_all_asserts(
                             tmp, coverage_id, parent_path, assertid_to_info
                         )
-    for subfragment, name, _src_loc in getattr(fragment, "subfragments", []):
+    for subfragment, name, _sloc in getattr(fragment, "subfragments", []):
         if hasattr(subfragment, "statements"):
-            coverage_id, assertid_to_info = tag_all_assertions(
+            coverage_id, assertid_to_info = tag_all_asserts(
                 subfragment, coverage_id, parent_path + (name,), assertid_to_info
             )
     return coverage_id, assertid_to_info
-    
-def insert_assertion_coverage_signals(fragment):
-    from amaranth.hdl._ast import Assign, Const, Signal, If
+
+def insert_assert_coverage_signals(fragment):
+    from amaranth.hdl._ast import Assign, Const, Signal, Switch as AstSwitch
     from amaranth.hdl._ir import Fragment as AmaranthFragment
 
-    coverage_signals = {}
+    coverage_signal_map = {}
 
-    def cov_name(cov_id, outcome):
-        parent_path, domain, serial = cov_id
-        if parent_path:
-            path = "_".join("anon" if p is None else str(p) for p in parent_path)
-        else:
-            path = "top"
-        return f"cov_{path}_{domain}_assert_{outcome}_{serial}"
+    def cov_name(assert_id, typ, outcome):
+        parent_path, domain, serial = assert_id
+        path = "_".join("anon" if p is None else str(p) for p in parent_path) if parent_path else "top"
+        return f"cov_{path}_{domain}_{typ}_{outcome}_{serial}"
 
-    def _is_assert_node(stmt):
-        cname = type(stmt).__name__
-        return hasattr(stmt, "test") and cname.lower().startswith("assert")
+    def cond_of(node):
+        c = getattr(node, "cond", None)
+        if c is None:
+            c = getattr(node, "test", None)
+        if c is None:
+            c = getattr(node, "expr", None)
+        return c
+
+    def make_sig(assert_id, typ, outcome):
+        s = Signal(name=cov_name(assert_id, typ, outcome), init=0)
+        coverage_signal_map[id(s)] = (assert_id, outcome)
+        return s
+
+    def truthy(expr):
+        try:
+            return expr != Const(0)
+        except Exception:
+            return expr
 
     def inject_in_stmt_list(domain, stmts):
         new = []
         for stmt in stmts:
-            if _is_assert_node(stmt) and hasattr(stmt, "_assert_cov_id") and not getattr(stmt, "_assert_cov_injected", False):
-                cov_id = stmt._assert_cov_id
-                true_sig  = coverage_signals.get((cov_id, "true"))
-                false_sig = coverage_signals.get((cov_id, "false"))
-                fail_sig  = coverage_signals.get((cov_id, "fail"))
-                if true_sig is None:
-                    true_sig = Signal(name=cov_name(cov_id, "true"),  init=0)
-                    coverage_signals[(cov_id, "true")] = true_sig
-                if false_sig is None:
-                    false_sig = Signal(name=cov_name(cov_id, "false"), init=0)
-                    coverage_signals[(cov_id, "false")] = false_sig
-                if fail_sig is None:
-                    fail_sig = Signal(name=cov_name(cov_id, "fail"),  init=0)
-                    coverage_signals[(cov_id, "fail")] = fail_sig
-                new.append(
-                    If(stmt.test,
-                       Assign(true_sig,  Const(1))
-                    ).Else(
-                       Assign(false_sig, Const(1))
-                    )
-                )
-                new.append(stmt)
-                stmt._assert_cov_injected = True
-            else:
-                for sub_list_name in ("then_stmts", "else_stmts", "cases"):
-                    if hasattr(stmt, sub_list_name):
-                        if sub_list_name == "cases":
-                            for _patterns, sub_stmts, _case_src in stmt.cases:
-                                instrumented = inject_in_stmt_list(domain, list(sub_stmts))
-                                sub_stmts[:] = instrumented
-                        else:
-                            sub_stmts = getattr(stmt, sub_list_name)
-                            instrumented = inject_in_stmt_list(domain, list(sub_stmts))
-                            sub_stmts[:] = instrumented
-                new.append(stmt)
+            if hasattr(stmt, "_assert_id") and not getattr(stmt, "_assert_injected", False):
+                aid = stmt._assert_id
+                typ = getattr(stmt, "_assert_type", "assert")
+                c = cond_of(stmt)
+                if c is not None:
+                    t = truthy(c)
+                    if typ in ("assert", "assume"):
+                        s_true  = make_sig(aid, typ, "true")
+                        s_false = make_sig(aid, typ, "false")
+                        s_fail  = make_sig(aid, typ, "fail")
+                        new.append(Assign(s_true,  t))
+                        new.append(Assign(s_false, ~t))
+                        new.append(Assign(s_fail,  ~t))
+                    elif typ == "cover":
+                        s_true = make_sig(aid, typ, "true")
+                        new.append(Assign(s_true, t))
+                stmt._assert_injected = True
+
+            new.append(stmt)
+
+            if isinstance(stmt, AstSwitch):
+                for _patterns, sub_stmts, _case_src in stmt.cases:
+                    instrumented = inject_in_stmt_list(domain, list(sub_stmts))
+                    sub_stmts[:] = instrumented
         return new
 
     def walk_fragment(frag):
@@ -550,23 +557,19 @@ def insert_assertion_coverage_signals(fragment):
                 walk_fragment(subfrag)
 
     walk_fragment(fragment)
-    return coverage_signals
+    return coverage_signal_map
 
 def mk_sim_with_assertcov(dut, verbose=False):
-    from amaranth.sim import Simulator
-    from amaranth.hdl._ir import Fragment
     mod = dut.elaborate(platform=None)
     fragment = Fragment.get(mod, platform=None)
-    _, assertid_to_info = tag_all_assertions(fragment)
-    coverage_signals = insert_assertion_coverage_signals(fragment)
-    signal_to_assert = {id(sig): (assert_id, outcome)
-                        for (assert_id, outcome), sig in coverage_signals.items()}
+    _, assertid_to_info = tag_all_asserts(fragment)
+    coverage_signal_map = insert_assert_coverage_signals(fragment)
     sim = Simulator(fragment)
-    assert_cov = AssertionCoverageObserver(signal_to_assert, sim._engine.state, assertid_to_info=assertid_to_info)
+    assert_cov = AssertionCoverageObserver(coverage_signal_map, sim._engine.state, assertid_to_info=assertid_to_info)
     sim._engine.add_observer(assert_cov)
     if verbose:
-        total = len({aid for (aid, _o) in coverage_signals.keys()})
-        print(f"[mk_sim_with_assertcov] Instrumented {total} assertions for coverage.")
+        total = len(assertid_to_info)
+        print(f"[mk_sim_with_assertcov] Instrumented {total} assertion-like nodes.")
     return sim, assert_cov, assertid_to_info, fragment
 
 def merge_assertcov(results, assertid_to_info):
@@ -575,57 +578,45 @@ def merge_assertcov(results, assertid_to_info):
             AGG_ASSERT_INFO[aid] = info
     for aid, buckets in results.items():
         for outcome, hits in buckets.items():
-            AGG_ASSERT_HITS[(aid, outcome)] += hits
+            if hits:
+                AGG_ASSERT_HITS[(aid, outcome)] += hits
 
-def emit_assert_summary(json_path="assertion_cov.json", label="tests"):
-    total = len(AGG_ASSERT_INFO)
-    evald = 0
-    covered = 0
-    for aid in AGG_ASSERT_INFO:
-        t = int(AGG_ASSERT_HITS.get((aid, "true"), 0))
-        f = int(AGG_ASSERT_HITS.get((aid, "false"), 0))
-        if (t + f) > 0:
-            evald += 1
-        if (t > 0 and f > 0):
-            covered += 1
-    pct_evald = 100.0 if total == 0 else (evald / total) * 100.0
-    pct_cov   = 100.0 if total == 0 else (covered / total) * 100.0
-    print(f"\n[Assertion coverage for {label}] evaluated {evald}/{total} = {pct_evald:.1f}% ; true+false {covered}/{total} = {pct_cov:.1f}%")
+def emit_agg_assert_summary(json_path="i2c_assertion_cov.json", label="test_i2c.py"):
+    node_ids = list({aid for (aid, _out) in AGG_ASSERT_HITS} | set(AGG_ASSERT_INFO.keys()))
+    node_ids.sort(key=lambda x: (AGG_ASSERT_INFO.get(x, ("", ""))[0]))
+    total_nodes = len(node_ids)
+    any_activity = sum(1 for aid in node_ids
+                       if (AGG_ASSERT_HITS.get((aid, "true"), 0) +
+                           AGG_ASSERT_HITS.get((aid, "false"), 0) +
+                           AGG_ASSERT_HITS.get((aid, "fail"), 0)) > 0)
+    pct = 100.0 if total_nodes == 0 else (any_activity / total_nodes) * 100.0
+    print(f"\n[Assertion coverage for {label}] {any_activity}/{total_nodes} = {pct:.1f}%")
     try:
         import json
         report = []
-        for aid, (name, typ) in AGG_ASSERT_INFO.items():
-            t = int(AGG_ASSERT_HITS.get((aid, "true"), 0))
-            f = int(AGG_ASSERT_HITS.get((aid, "false"), 0))
-            fl = int(AGG_ASSERT_HITS.get((aid, "fail"),  0))
-            report.append({
+        for aid in node_ids:
+            name, typ = AGG_ASSERT_INFO.get(aid, ("<unknown>", "<unknown>"))
+            rec = {
                 "id": str(aid),
                 "name": name,
                 "type": typ,
-                "true": t,
-                "false": f,
-                "fail": fl,
-                "evaluated": (t + f) > 0,
-                "both_true_and_false": (t > 0 and f > 0),
-            })
-        with open(json_path, "w") as fh:
-            json.dump({
-                "summary": {"total": total, "evaluated": evald, "eval_percent": pct_evald,
-                            "both_true_and_false": covered, "both_percent": pct_cov},
-                "assertions": report
-            }, fh, indent=2)
+                "true": int(AGG_ASSERT_HITS.get((aid, "true"), 0)),
+                "false": int(AGG_ASSERT_HITS.get((aid, "false"), 0)),
+                "fail": int(AGG_ASSERT_HITS.get((aid, "fail"), 0)),
+            }
+            report.append(rec)
+        with open(json_path, "w") as f:
+            json.dump({"summary": {"active": any_activity, "total": total_nodes, "percent": pct},
+                       "assertions": report}, f, indent=2)
         print(f"Wrote {json_path}")
     except Exception as e:
         print(f"(could not write JSON report: {e})")
 
+def emit_assert_summary(json_path="i2c_assertion_cov.json", label="test_i2c.py"):
+    return emit_agg_assert_summary(json_path=json_path, label=label)
 
 
-
-
-
-
-
-# ##### EXPRESSION COVERAGE #####
+##### EXPRESSION COVERAGE #####
 # from functools import reduce
 # from operator import or_ as _bor
 

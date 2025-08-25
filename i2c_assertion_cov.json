@@ -1,10 +1,8 @@
 {
   "summary": {
+    "active": 0,
     "total": 0,
-    "evaluated": 0,
-    "eval_percent": 100.0,
-    "both_true_and_false": 0,
-    "both_percent": 100.0
+    "percent": 100.0
   },
   "assertions": []
 }

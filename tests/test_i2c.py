@@ -8,6 +8,48 @@ from amaranth.sim._coverage import ToggleCoverageObserver, ToggleDirection, Stat
 from chipflow_digital_ip.io import I2CPeripheral
 from tests.test_utils import *
 from amaranth.hdl._ir import Fragment
+from amaranth.hdl import Assert, Cover
+
+# class I2CChecker(Elaboratable):
+#     def __init__(self, pins):
+#         self.pins = pins  # expect dut.i2c.i2c_pins
+
+#     def elaborate(self, platform):
+#         m = Module()
+
+#         # --- history registers (make sync domain non-empty)
+#         sda_prev = Signal(init=1)
+#         scl_prev = Signal(init=1)
+#         boot = Signal(init=1)  # high for first cycle only
+#         m.d.sync += [
+#             sda_prev.eq(self.pins.sda.i),
+#             scl_prev.eq(self.pins.scl.i),
+#             boot.eq(0),
+#         ]
+
+#         # --- detect changes between cycles
+#         sda_changed = sda_prev ^ self.pins.sda.i
+
+#         # START/STOP exceptions (when SCL is high)
+#         start = (sda_prev == 1) & (self.pins.sda.i == 0) & self.pins.scl.i
+#         stop  = (sda_prev == 0) & (self.pins.sda.i == 1) & self.pins.scl.i
+#         allow = start | stop
+
+#         # Assert with registered SCL to avoid mid-cycle glitches
+#         with m.If(~boot):
+#             m.d.comb += Assert(~(sda_changed & scl_prev) | allow)
+
+#         # A couple of covers so coverage will show activity
+#         m.d.comb += [
+#             Cover(start),
+#             Cover(stop),
+#         ]
+
+#         # --- keep-alives (see note B below)
+#         comb_keep = Signal()
+#         m.d.comb += comb_keep.eq(comb_keep)
+
+#         return m
 
 class _I2CHarness(Elaboratable):
     def __init__(self):
@@ -27,6 +69,7 @@ class _I2CHarness(Elaboratable):
             self.i2c.i2c_pins.sda.i.eq(self.sda),
             self.i2c.i2c_pins.scl.i.eq(self.scl),
         ]
+        # m.submodules.i2c_checker = I2CChecker(self.i2c.i2c_pins)
         return m
 
 class TestI2CPeripheral(unittest.TestCase):
@@ -199,8 +242,8 @@ class TestI2CPeripheral(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        emit_assert_summary("i2c_assertion_cov.json", label="test_i2c.py")
     #     emit_agg_summary("i2c_statement_cov.json", label="tests/test_i2c.py")
     #     emit_agg_block_summary("i2c_block_cov.json", label=__name__)
-        emit_assert_summary("i2c_assertion_cov.json", label="test_i2c.py")
     # emit_expr_summary("i2c_expression_cov.json", label="test_i2c.py")
 
